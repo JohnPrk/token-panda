@@ -14,6 +14,8 @@ It quietly sits on your desktop and shows:
   - getting tired (≥70%) → slower bob, washed out
   - 5h budget gone → 💤 sleeping
   - weekly budget gone → 💀 collapsed
+- **Menu bar tray** — current usage % and mood emoji always visible up top; click to toggle the pet window
+- **Native notifications** when crossing 70% / 90% / 100% on either window — so you don't have to be looking at the pet to know
 
 > Inspired by [clawd-on-desk](https://github.com/rullerzhou-afk/clawd-on-desk). This is a Claude-only **Tauri** rewrite (different stack, different scope) focused on **token quota & cache window awareness** rather than agent activity hooks.
 
