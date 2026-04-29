@@ -288,6 +288,7 @@ function Pet({
             fiveRemaining={d.fiveHourRemaining}
             weeklyRemaining={d.weeklyRemaining}
             fiveResetMs={d.fiveHourResetMs}
+            weeklyResetMs={d.weeklyResetMs}
           />
         )}
       </div>
@@ -384,10 +385,12 @@ function UsageBubble({
   fiveRemaining,
   weeklyRemaining,
   fiveResetMs,
+  weeklyResetMs,
 }: {
   fiveRemaining: number;
   weeklyRemaining: number;
   fiveResetMs: number | null;
+  weeklyResetMs: number | null;
 }) {
   return (
     <div className="bubble usage">
@@ -405,7 +408,11 @@ function UsageBubble({
         <span className={`usage-pct ${toneOf(weeklyRemaining)}`}>
           {pad(Math.round(weeklyRemaining * 100))}%
         </span>
-        <span className="usage-reset"> </span>
+        <span className="usage-reset">
+          {weeklyResetMs !== null
+            ? `${formatResetCountdown(weeklyResetMs)} (추정)`
+            : "—"}
+        </span>
       </div>
     </div>
   );
@@ -506,6 +513,8 @@ function Settings({
           />
         )}
 
+        <Diagnostics snap={snap} />
+
         <div className="settings-actions">
           <button onClick={onClose}>취소</button>
           <button
@@ -596,6 +605,38 @@ function Calibrator({
       <button type="button" className="primary slim" onClick={compute}>
         한도 계산해서 Custom에 적용
       </button>
+    </div>
+  );
+}
+
+function Diagnostics({ snap }: { snap: UsageSnapshot | null }) {
+  if (!snap) {
+    return (
+      <div className="diagnostics">
+        <strong>진단</strong>
+        <span>jsonl 데이터 없음</span>
+      </div>
+    );
+  }
+  const lastReq = snap.last_request_at
+    ? new Date(snap.last_request_at).toLocaleTimeString()
+    : "—";
+  const lastUser = snap.last_user_prompt_at
+    ? new Date(snap.last_user_prompt_at).toLocaleTimeString()
+    : "—";
+  const fiveStart = snap.five_hour_window_start
+    ? new Date(snap.five_hour_window_start).toLocaleString()
+    : "(없음 — 5h 윈도우 비활성)";
+  return (
+    <div className="diagnostics">
+      <strong>진단</strong>
+      <div className="diag-row"><span>5h 카운트</span><code>{formatTokens(snap.five_hour_tokens)}</code></div>
+      <div className="diag-row"><span>주간 카운트</span><code>{formatTokens(snap.weekly_tokens)}</code></div>
+      <div className="diag-row"><span>5h 윈도우 시작</span><code>{fiveStart}</code></div>
+      <div className="diag-row"><span>마지막 응답</span><code>{lastReq}</code></div>
+      <div className="diag-row"><span>마지막 사용자 프롬프트</span><code>{lastUser}</code></div>
+      <div className="diag-row"><span>생각 중</span><code>{snap.is_thinking ? "yes" : "no"}</code></div>
+      <div className="diag-row"><span>캐시 hit/miss</span><code>{snap.cache_hits_5min} / {snap.cache_misses_5min}</code></div>
     </div>
   );
 }

@@ -182,7 +182,7 @@
 
 /* Usage % bubble (between cache + panda) */
 .bubble.usage {
-  min-width: 142px;
+  min-width: 168px;
   padding: 5px 10px;
 }
 .usage-row {
@@ -517,6 +517,38 @@
   width: 100%;
 }
 
+.diagnostics {
+  margin-top: 6px;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  font-size: 10px;
+  color: #555;
+  background: #f7f7f9;
+  border: 1px solid #e6e6e8;
+  border-radius: 6px;
+  padding: 6px 8px;
+}
+.diagnostics strong {
+  font-size: 10px;
+  color: #333;
+  margin-bottom: 2px;
+}
+.diag-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+}
+.diag-row code {
+  background: #ececec;
+  font-family: ui-monospace, monospace;
+  font-size: 9px;
+  padding: 1px 5px;
+  border-radius: 3px;
+  color: #333;
+}
+
 @media (prefers-color-scheme: dark) {
   .onboarding,
   .bubble,
@@ -537,6 +569,13 @@
     color: #d6e8d6;
   }
   .calibrator-preview code { background: #2a402a; color: #b8e0b6; }
+  .diagnostics {
+    background: rgba(35, 35, 42, 0.85);
+    border-color: #3a3a44;
+    color: #cfcfd0;
+  }
+  .diagnostics strong { color: #eee; }
+  .diag-row code { background: #2a2a32; color: #cfcfd0; }
   .usage-pct.warn { color: #ffbb6a; }
   .usage-pct.danger { color: #ff7474; }
   .usage-reset { color: #777; }

@@ -10,6 +10,26 @@ use tauri::tray::{TrayIconBuilder, TrayIconEvent};
 use tauri::{AppHandle, Emitter, Manager, WebviewWindow};
 
 #[cfg(target_os = "macos")]
+fn set_macos_accessory_app() {
+    use objc2::class;
+    use objc2::msg_send;
+    use objc2::runtime::AnyObject;
+    unsafe {
+        let cls = class!(NSApplication);
+        let app: *mut AnyObject = msg_send![cls, sharedApplication];
+        // NSApplicationActivationPolicyAccessory = 1
+        // No Dock icon, no Cmd-Tab entry. macOS no longer manages our
+        // window with the regular Space mechanics, which is the only
+        // configuration where the 'stationary' collection behavior is
+        // honored reliably.
+        let _: () = msg_send![app, setActivationPolicy: 1i64];
+    }
+}
+
+#[cfg(not(target_os = "macos"))]
+fn set_macos_accessory_app() {}
+
+#[cfg(target_os = "macos")]
 fn set_macos_panel_behavior(window: &WebviewWindow) {
     use objc2::msg_send;
     use objc2::runtime::AnyObject;
@@ -195,6 +215,10 @@ pub fn run() {
                         .build(),
                 )?;
             }
+            // Hide the Dock icon FIRST so the window we're about to attach
+            // panel-behavior to is created under accessory mode.
+            set_macos_accessory_app();
+
             let handle = app.handle().clone();
             build_tray(&handle)?;
 
