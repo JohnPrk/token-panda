@@ -10,6 +10,11 @@
     "core:window:allow-set-always-on-top",
     "core:window:allow-set-ignore-cursor-events",
     "core:webview:default",
-    "store:default"
+    "core:tray:default",
+    "core:menu:default",
+    "core:app:default",
+    "store:default",
+    "notification:default",
+    "notification:allow-notify"
   ]
 }

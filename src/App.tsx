@@ -12,7 +12,14 @@ import {
   formatRemain,
   formatTokens,
 } from "./petLogic";
+import { maybeNotify, resetThreshold } from "./notifier";
 import "./App.css";
+
+const THRESHOLDS: Array<[number, string]> = [
+  [0.7, "70%"],
+  [0.9, "90%"],
+  [1.0, "100%"],
+];
 
 type View = "loading" | "onboarding" | "pet";
 
@@ -155,6 +162,43 @@ function Pet({
   }, []);
 
   const d = useMemo(() => derive(snap, config.limits, now), [snap, config, now]);
+
+  // Update tray title with current usage
+  useEffect(() => {
+    const worst = Math.max(d.fiveHourPct, d.weeklyPct);
+    const emoji =
+      d.petState === "dead" ? "💀" :
+      d.petState === "sleep" ? "💤" :
+      d.petState === "tired" ? "😓" : "🐼";
+    const title = `${emoji} ${Math.round(worst * 100)}%`;
+    invoke("set_tray_title", { title }).catch(() => {});
+  }, [d.fiveHourPct, d.weeklyPct, d.petState]);
+
+  // Threshold notifications
+  useEffect(() => {
+    if (!snap) return;
+    for (const [t, label] of THRESHOLDS) {
+      if (d.fiveHourPct >= t) {
+        maybeNotify({
+          key: `5h-${t}`,
+          title: `5시간 토큰 ${label} 도달`,
+          body: `${formatTokens(snap.five_hour_tokens)} / ${formatTokens(config.limits.fiveHour)} 사용`,
+        });
+      }
+      if (d.weeklyPct >= t) {
+        maybeNotify({
+          key: `weekly-${t}`,
+          title: `주간 토큰 ${label} 도달`,
+          body: `${formatTokens(snap.weekly_tokens)} / ${formatTokens(config.limits.weekly)} 사용`,
+        });
+      }
+    }
+    // Reset notification dedupe when window rolls over (≥1h since last request)
+    if (snap.last_request_at) {
+      const elapsed = Date.parse(snap.now) - Date.parse(snap.last_request_at);
+      if (elapsed > 5 * 3600_000) resetThreshold("5h-");
+    }
+  }, [d.fiveHourPct, d.weeklyPct, snap, config.limits]);
 
   const skin = findSkin(config.skin);
 

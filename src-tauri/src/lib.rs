@@ -5,6 +5,8 @@ use parking_lot::Mutex;
 use std::path::PathBuf;
 use std::sync::Arc;
 use std::time::Duration;
+use tauri::menu::{Menu, MenuItem};
+use tauri::tray::{TrayIconBuilder, TrayIconEvent};
 use tauri::{AppHandle, Emitter, Manager};
 
 struct WatcherState {
@@ -19,6 +21,27 @@ fn get_usage_snapshot() -> usage::UsageSnapshot {
 #[tauri::command]
 fn claude_projects_path() -> Option<PathBuf> {
     usage::claude_projects_dir()
+}
+
+#[tauri::command]
+fn set_tray_title(app: AppHandle, title: String) -> Result<(), String> {
+    if let Some(tray) = app.tray_by_id("main-tray") {
+        tray.set_title(Some(title)).map_err(|e| e.to_string())?;
+    }
+    Ok(())
+}
+
+#[tauri::command]
+fn toggle_main_window(app: AppHandle) -> Result<(), String> {
+    if let Some(window) = app.get_webview_window("main") {
+        if window.is_visible().unwrap_or(false) {
+            window.hide().map_err(|e| e.to_string())?;
+        } else {
+            window.show().map_err(|e| e.to_string())?;
+            window.set_focus().map_err(|e| e.to_string())?;
+        }
+    }
+    Ok(())
 }
 
 fn emit_snapshot(app: &AppHandle) {
@@ -74,10 +97,51 @@ fn start_watcher(app: AppHandle) -> Arc<WatcherState> {
     state
 }
 
+fn build_tray(app: &AppHandle) -> tauri::Result<()> {
+    let show_item = MenuItem::with_id(app, "show", "펫 보이기/숨기기", true, None::<&str>)?;
+    let quit_item = MenuItem::with_id(app, "quit", "종료", true, None::<&str>)?;
+    let menu = Menu::with_items(app, &[&show_item, &quit_item])?;
+
+    let _tray = TrayIconBuilder::with_id("main-tray")
+        .icon(app.default_window_icon().unwrap().clone())
+        .icon_as_template(true)
+        .title("🐼 …")
+        .menu(&menu)
+        .on_menu_event(|app, event| match event.id.as_ref() {
+            "show" => {
+                if let Some(window) = app.get_webview_window("main") {
+                    if window.is_visible().unwrap_or(false) {
+                        let _ = window.hide();
+                    } else {
+                        let _ = window.show();
+                        let _ = window.set_focus();
+                    }
+                }
+            }
+            "quit" => app.exit(0),
+            _ => {}
+        })
+        .on_tray_icon_event(|tray, event| {
+            if let TrayIconEvent::Click { .. } = event {
+                if let Some(window) = tray.app_handle().get_webview_window("main") {
+                    if window.is_visible().unwrap_or(false) {
+                        let _ = window.hide();
+                    } else {
+                        let _ = window.show();
+                        let _ = window.set_focus();
+                    }
+                }
+            }
+        })
+        .build(app)?;
+    Ok(())
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_store::Builder::default().build())
+        .plugin(tauri_plugin_notification::init())
         .setup(|app| {
             if cfg!(debug_assertions) {
                 app.handle().plugin(
@@ -87,13 +151,16 @@ pub fn run() {
                 )?;
             }
             let handle = app.handle().clone();
+            build_tray(&handle)?;
             let watcher = start_watcher(handle);
             app.manage(watcher);
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
             get_usage_snapshot,
-            claude_projects_path
+            claude_projects_path,
+            set_tray_title,
+            toggle_main_window
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
