@@ -10,6 +10,7 @@ import {
   CACHE_TTL_MS,
   derive,
   formatRemain,
+  formatResetCountdown,
   formatTokens,
 } from "./petLogic";
 import { maybeNotify, resetThreshold } from "./notifier";
@@ -233,12 +234,14 @@ function Pet({
           pct={d.fiveHourPct}
           tokens={snap?.five_hour_tokens ?? 0}
           limit={config.limits.fiveHour}
+          resetMs={d.fiveHourResetMs}
         />
         <Gauge
           label="주간"
           pct={d.weeklyPct}
           tokens={snap?.weekly_tokens ?? 0}
           limit={config.limits.weekly}
+          resetMs={d.weeklyResetMs}
         />
       </div>
 
@@ -292,11 +295,13 @@ function Gauge({
   pct,
   tokens,
   limit,
+  resetMs,
 }: {
   label: string;
   pct: number;
   tokens: number;
   limit: number;
+  resetMs: number | null;
 }) {
   const tone = pct >= 1 ? "danger" : pct >= 0.7 ? "warn" : "ok";
   return (
@@ -309,7 +314,10 @@ function Gauge({
         <div className="gauge-fill" style={{ width: `${Math.min(1, pct) * 100}%` }} />
       </div>
       <div className="gauge-foot">
-        {formatTokens(tokens)} / {formatTokens(limit)}
+        <span>{formatTokens(tokens)} / {formatTokens(limit)}</span>
+        {resetMs !== null && (
+          <span className="gauge-reset">{formatResetCountdown(resetMs)}</span>
+        )}
       </div>
     </div>
   );

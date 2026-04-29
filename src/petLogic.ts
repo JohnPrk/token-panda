@@ -9,6 +9,8 @@ export type DerivedState = {
   petState: PetState;
   cacheRemainMs: number | null;
   cacheNudge: boolean;
+  fiveHourResetMs: number | null;
+  weeklyResetMs: number | null;
 };
 
 export function derive(
@@ -23,6 +25,8 @@ export function derive(
       petState: "idle",
       cacheRemainMs: null,
       cacheNudge: false,
+      fiveHourResetMs: null,
+      weeklyResetMs: null,
     };
   }
   const fiveHourPct = clampPct(snap.five_hour_tokens / Math.max(1, limits.fiveHour));
@@ -44,7 +48,22 @@ export function derive(
     }
   }
 
-  return { fiveHourPct, weeklyPct, petState, cacheRemainMs, cacheNudge };
+  const fiveHourResetMs = snap.five_hour_resets_at
+    ? Math.max(0, Date.parse(snap.five_hour_resets_at) - nowMs)
+    : null;
+  const weeklyResetMs = snap.weekly_resets_at
+    ? Math.max(0, Date.parse(snap.weekly_resets_at) - nowMs)
+    : null;
+
+  return {
+    fiveHourPct,
+    weeklyPct,
+    petState,
+    cacheRemainMs,
+    cacheNudge,
+    fiveHourResetMs,
+    weeklyResetMs,
+  };
 }
 
 function clampPct(v: number) {
@@ -64,4 +83,15 @@ export function formatRemain(ms: number): string {
   const mm = Math.floor(s / 60);
   const ss = s % 60;
   return `${mm}:${ss.toString().padStart(2, "0")}`;
+}
+
+export function formatResetCountdown(ms: number): string {
+  if (ms <= 0) return "곧 초기화";
+  const totalMin = Math.floor(ms / 60000);
+  const days = Math.floor(totalMin / (60 * 24));
+  const hours = Math.floor((totalMin % (60 * 24)) / 60);
+  const mins = totalMin % 60;
+  if (days >= 1) return `${days}일 ${hours}시간 후`;
+  if (hours >= 1) return `${hours}시간 ${mins}분 후`;
+  return `${mins}분 후`;
 }

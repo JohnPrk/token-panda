@@ -5,6 +5,9 @@ use std::io::{BufRead, BufReader};
 use std::path::{Path, PathBuf};
 use walkdir::WalkDir;
 
+const FIVE_HOUR_GAP_THRESHOLD: i64 = 5 * 3600;
+const WEEKLY_LOOKBACK_DAYS: i64 = 7;
+
 #[derive(Debug, Clone, Copy, Serialize)]
 pub struct UsageEntry {
     pub timestamp: DateTime<Utc>,
@@ -16,6 +19,13 @@ pub struct UsageSnapshot {
     pub five_hour_tokens: u64,
     pub weekly_tokens: u64,
     pub last_request_at: Option<DateTime<Utc>>,
+    /// First message timestamp of the current 5h window (or None if no recent activity).
+    pub five_hour_window_start: Option<DateTime<Utc>>,
+    /// When the current 5h window expires (window_start + 5h).
+    pub five_hour_resets_at: Option<DateTime<Utc>>,
+    /// First message timestamp of the current 7d weekly window.
+    pub weekly_window_start: Option<DateTime<Utc>>,
+    pub weekly_resets_at: Option<DateTime<Utc>>,
     pub now: DateTime<Utc>,
 }
 
@@ -36,7 +46,8 @@ struct RawUsage {
     input_tokens: Option<u64>,
     output_tokens: Option<u64>,
     cache_creation_input_tokens: Option<u64>,
-    cache_read_input_tokens: Option<u64>,
+    // cache_read_input_tokens intentionally ignored — billed at 0.1× and
+    // including it inflated counts ~10× in real usage tests.
 }
 
 pub fn claude_projects_dir() -> Option<PathBuf> {
@@ -97,8 +108,7 @@ fn scan_file(path: &Path, since: DateTime<Utc>, out: &mut Vec<UsageEntry>) {
         }
         let tokens = u.input_tokens.unwrap_or(0)
             + u.output_tokens.unwrap_or(0)
-            + u.cache_creation_input_tokens.unwrap_or(0)
-            + u.cache_read_input_tokens.unwrap_or(0);
+            + u.cache_creation_input_tokens.unwrap_or(0);
         if tokens == 0 {
             continue;
         }
@@ -106,29 +116,67 @@ fn scan_file(path: &Path, since: DateTime<Utc>, out: &mut Vec<UsageEntry>) {
     }
 }
 
+/// Find the start of the active 5-hour window: the first entry whose preceding
+/// gap is ≥ 5h (or the earliest entry overall if no such gap exists in the
+/// loaded range). This mirrors how Anthropic's 5h quota window actually rolls.
+fn five_hour_window_start(entries: &[UsageEntry], now: DateTime<Utc>) -> Option<DateTime<Utc>> {
+    if entries.is_empty() {
+        return None;
+    }
+    let last = entries.last().unwrap();
+    // If the most recent entry is older than 5h, no active window.
+    if (now - last.timestamp).num_seconds() >= FIVE_HOUR_GAP_THRESHOLD {
+        return None;
+    }
+    // Walk backwards. Window start = first entry where the previous entry was
+    // ≥ 5h earlier (or the earliest entry).
+    for i in (1..entries.len()).rev() {
+        let gap = (entries[i].timestamp - entries[i - 1].timestamp).num_seconds();
+        if gap >= FIVE_HOUR_GAP_THRESHOLD {
+            return Some(entries[i].timestamp);
+        }
+    }
+    Some(entries[0].timestamp)
+}
+
 pub fn snapshot() -> UsageSnapshot {
     let now = Utc::now();
-    let week_start = now - Duration::days(7);
-    let entries = collect_entries_since(week_start);
-    let five_hour_cut = now - Duration::hours(5);
+    let lookback = now - Duration::days(WEEKLY_LOOKBACK_DAYS);
+    let entries = collect_entries_since(lookback);
 
-    let mut weekly: u64 = 0;
+    let five_start = five_hour_window_start(&entries, now);
+    let five_reset = five_start.map(|s| s + Duration::hours(5));
+
     let mut five_hour: u64 = 0;
+    let mut weekly: u64 = 0;
     let mut last: Option<DateTime<Utc>> = None;
+    let mut weekly_first: Option<DateTime<Utc>> = None;
     for e in &entries {
         weekly = weekly.saturating_add(e.tokens);
-        if e.timestamp >= five_hour_cut {
-            five_hour = five_hour.saturating_add(e.tokens);
+        if weekly_first.is_none() {
+            weekly_first = Some(e.timestamp);
+        }
+        if let Some(start) = five_start {
+            if e.timestamp >= start && e.timestamp <= now {
+                five_hour = five_hour.saturating_add(e.tokens);
+            }
         }
         last = Some(match last {
             Some(prev) if prev > e.timestamp => prev,
             _ => e.timestamp,
         });
     }
+
+    let weekly_reset = weekly_first.map(|s| s + Duration::days(WEEKLY_LOOKBACK_DAYS));
+
     UsageSnapshot {
         five_hour_tokens: five_hour,
         weekly_tokens: weekly,
         last_request_at: last,
+        five_hour_window_start: five_start,
+        five_hour_resets_at: five_reset,
+        weekly_window_start: weekly_first,
+        weekly_resets_at: weekly_reset,
         now,
     }
 }
