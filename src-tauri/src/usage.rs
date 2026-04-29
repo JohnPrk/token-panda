@@ -5,7 +5,6 @@ use std::io::{BufRead, BufReader};
 use std::path::{Path, PathBuf};
 use walkdir::WalkDir;
 
-const FIVE_HOUR_GAP_THRESHOLD: i64 = 5 * 3600;
 const WEEKLY_LOOKBACK_DAYS: i64 = 7;
 const CACHE_WINDOW_MS: i64 = 5 * 60 * 1000;
 
@@ -174,6 +173,14 @@ fn has_tool_result(content: Option<&serde_json::Value>) -> bool {
     false
 }
 
+/// Anthropic's 5-hour window is anchored at the FIRST message of a window.
+/// When that window expires (5h after start), the very next message starts
+/// a brand-new window — regardless of whether there was an idle gap.
+///
+/// Walk forward through assistants, anchoring a new window every time the
+/// previous one has lapsed. Return the start of the window that contains
+/// the latest assistant message (or None if all windows have expired and
+/// no new request has come in since).
 fn five_hour_window_start(
     assistant_entries: &[&ParsedEntry],
     now: DateTime<Utc>,
@@ -181,18 +188,18 @@ fn five_hour_window_start(
     if assistant_entries.is_empty() {
         return None;
     }
-    let last = assistant_entries.last().unwrap();
-    if (now - last.timestamp).num_seconds() >= FIVE_HOUR_GAP_THRESHOLD {
-        return None;
-    }
-    for i in (1..assistant_entries.len()).rev() {
-        let gap = (assistant_entries[i].timestamp - assistant_entries[i - 1].timestamp)
-            .num_seconds();
-        if gap >= FIVE_HOUR_GAP_THRESHOLD {
-            return Some(assistant_entries[i].timestamp);
+    let mut start = assistant_entries[0].timestamp;
+    let mut end = start + Duration::hours(5);
+    for entry in assistant_entries.iter().skip(1) {
+        if entry.timestamp >= end {
+            start = entry.timestamp;
+            end = start + Duration::hours(5);
         }
     }
-    Some(assistant_entries[0].timestamp)
+    if now >= end {
+        return None;
+    }
+    Some(start)
 }
 
 pub fn snapshot() -> UsageSnapshot {

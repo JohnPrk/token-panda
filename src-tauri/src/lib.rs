@@ -21,24 +21,25 @@ fn set_macos_panel_behavior(window: &WebviewWindow) {
     if ns_window.is_null() {
         return;
     }
-    // We want the pet:
-    //   - to appear on every macOS Space (canJoinAllSpaces, 1<<0)
-    //   - to NOT slide along during Space-switch animation (stationary, 1<<4)
-    //   - to NOT participate in Cmd-` window cycling (ignoresCycle, 1<<6)
-    //   - to overlay fullscreen apps (fullScreenAuxiliary, 1<<8)
-    //
-    // Crucially we set this AFTER any tauri-side workspace tweaks have run,
-    // because tauri's set_visible_on_all_workspaces clears the stationary bit.
+    // Pet behavior we want:
+    //   - canJoinAllSpaces (1<<0)        appear on every Space
+    //   - stationary       (1<<4)        don't slide with Space switches
+    //   - ignoresCycle     (1<<6)        skip Cmd-` cycling
+    //   - fullScreenAuxiliary (1<<8)     overlay fullscreen apps
     let behavior: u64 = (1 << 0) | (1 << 4) | (1 << 6) | (1 << 8);
-    // NSStatusWindowLevel (= kCGStatusWindowLevel = 25). Higher than
-    // NSFloatingWindowLevel (3) so the pet stays above tooltips and most
-    // overlays, and is reliably non-managed by Spaces.
+    // kCGFloatingWindowLevelKey-equivalent that survives Mission Control:
+    // NSStatusWindowLevel = 25.
     let level: i64 = 25;
     unsafe {
         let _: () = msg_send![ns_window, setCollectionBehavior: behavior];
         let _: () = msg_send![ns_window, setLevel: level];
-        // Don't hide on miniaturize / app deactivate.
         let _: () = msg_send![ns_window, setHidesOnDeactivate: false];
+        // Disable the per-Space slide animation entirely. Without this the
+        // window can still briefly travel during the transition even with
+        // 'stationary' set — NSWindowAnimationBehaviorNone freezes that.
+        // NSWindowAnimationBehaviorNone = 2
+        let _: () = msg_send![ns_window, setAnimationBehavior: 2i64];
+        // setMovableByWindowBackground stays true (we drag from the panda).
     }
 }
 
@@ -135,8 +136,9 @@ fn start_watcher(app: AppHandle) -> Arc<WatcherState> {
 
 fn build_tray(app: &AppHandle) -> tauri::Result<()> {
     let show_item = MenuItem::with_id(app, "show", "펫 보이기/숨기기", true, None::<&str>)?;
+    let settings_item = MenuItem::with_id(app, "settings", "설정...", true, None::<&str>)?;
     let quit_item = MenuItem::with_id(app, "quit", "종료", true, None::<&str>)?;
-    let menu = Menu::with_items(app, &[&show_item, &quit_item])?;
+    let menu = Menu::with_items(app, &[&show_item, &settings_item, &quit_item])?;
 
     let _tray = TrayIconBuilder::with_id("main-tray")
         .icon(app.default_window_icon().unwrap().clone())
@@ -152,6 +154,13 @@ fn build_tray(app: &AppHandle) -> tauri::Result<()> {
                         let _ = window.show();
                         let _ = window.set_focus();
                     }
+                }
+            }
+            "settings" => {
+                if let Some(window) = app.get_webview_window("main") {
+                    let _ = window.show();
+                    let _ = window.set_focus();
+                    let _ = app.emit("show-settings", ());
                 }
             }
             "quit" => app.exit(0),
@@ -190,12 +199,14 @@ pub fn run() {
             build_tray(&handle)?;
 
             if let Some(window) = app.get_webview_window("main") {
-                // Apply twice: once now, and once after the window has had a
-                // chance to settle (tauri/tao apply their own collection-
-                // behavior bits during early lifecycle). The second pass wins.
                 #[cfg(target_os = "macos")]
                 {
+                    // 1) Apply once during setup.
                     set_macos_panel_behavior(&window);
+
+                    // 2) Apply again ~200ms later — tao re-applies its own
+                    //    collection-behavior bits during early window
+                    //    lifecycle, after our setup hook has returned.
                     let w_for_thread = window.clone();
                     std::thread::spawn(move || {
                         std::thread::sleep(Duration::from_millis(200));
@@ -203,6 +214,26 @@ pub fn run() {
                         let _ = w_for_thread.run_on_main_thread(move || {
                             set_macos_panel_behavior(&w_for_main);
                         });
+                    });
+
+                    // 3) Re-apply on every relevant lifecycle event. Some
+                    //    tao/macOS interactions (focus, Space change, app
+                    //    activation) reset the collection behavior; we
+                    //    enforce it back to our values each time.
+                    let w_for_event = window.clone();
+                    window.on_window_event(move |event| {
+                        use tauri::WindowEvent;
+                        match event {
+                            WindowEvent::Focused(_)
+                            | WindowEvent::Resized(_)
+                            | WindowEvent::Moved(_) => {
+                                let w = w_for_event.clone();
+                                let _ = w_for_event.run_on_main_thread(move || {
+                                    set_macos_panel_behavior(&w);
+                                });
+                            }
+                            _ => {}
+                        }
                     });
                 }
             }

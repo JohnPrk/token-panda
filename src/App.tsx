@@ -1,7 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
-import { getCurrentWindow } from "@tauri-apps/api/window";
 import type { PlanConfig, PlanId, UsageSnapshot } from "./types";
 import { PLAN_PRESETS } from "./types";
 import { loadPlanConfig, savePlanConfig } from "./store";
@@ -161,10 +160,12 @@ function Pet({
     const unlistenP = listen<UsageSnapshot>("usage-update", (e) =>
       setSnap(e.payload),
     );
+    const unlistenSettings = listen("show-settings", () => setShowSettings(true));
     const tick = setInterval(() => setNow(Date.now()), 500);
     return () => {
       clearInterval(tick);
       unlistenP.then((fn) => fn());
+      unlistenSettings.then((fn) => fn());
     };
   }, []);
 
@@ -287,7 +288,6 @@ function Pet({
             fiveRemaining={d.fiveHourRemaining}
             weeklyRemaining={d.weeklyRemaining}
             fiveResetMs={d.fiveHourResetMs}
-            weeklyResetMs={d.weeklyResetMs}
           />
         )}
       </div>
@@ -318,21 +318,6 @@ function Pet({
           </div>
         )}
       </div>
-
-      <button
-        className="gear"
-        onClick={() => setShowSettings(true)}
-        title="설정"
-      >
-        ⚙
-      </button>
-      <button
-        className="close"
-        onClick={() => getCurrentWindow().close()}
-        title="닫기"
-      >
-        ×
-      </button>
 
       {showSettings && (
         <Settings
@@ -399,35 +384,35 @@ function UsageBubble({
   fiveRemaining,
   weeklyRemaining,
   fiveResetMs,
-  weeklyResetMs,
 }: {
   fiveRemaining: number;
   weeklyRemaining: number;
   fiveResetMs: number | null;
-  weeklyResetMs: number | null;
 }) {
   return (
     <div className="bubble usage">
       <div className="usage-row">
         <span className="usage-label">5h</span>
         <span className={`usage-pct ${toneOf(fiveRemaining)}`}>
-          {Math.round(fiveRemaining * 100)}%
+          {pad(Math.round(fiveRemaining * 100))}%
         </span>
-        {fiveResetMs !== null && (
-          <span className="usage-reset">{formatResetCountdown(fiveResetMs)}</span>
-        )}
+        <span className="usage-reset">
+          {fiveResetMs !== null ? formatResetCountdown(fiveResetMs) : "—"}
+        </span>
       </div>
       <div className="usage-row">
         <span className="usage-label">주간</span>
         <span className={`usage-pct ${toneOf(weeklyRemaining)}`}>
-          {Math.round(weeklyRemaining * 100)}%
+          {pad(Math.round(weeklyRemaining * 100))}%
         </span>
-        {weeklyResetMs !== null && (
-          <span className="usage-reset">{formatResetCountdown(weeklyResetMs)}</span>
-        )}
+        <span className="usage-reset"> </span>
       </div>
     </div>
   );
+}
+
+function pad(n: number) {
+  return n < 10 ? `  ${n}` : n < 100 ? ` ${n}` : `${n}`;
 }
 
 function toneOf(remaining: number) {
