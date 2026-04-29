@@ -5,7 +5,9 @@ import { getCurrentWindow } from "@tauri-apps/api/window";
 import type { PlanConfig, PlanId, UsageSnapshot } from "./types";
 import { PLAN_PRESETS } from "./types";
 import { loadPlanConfig, savePlanConfig } from "./store";
-import { DEFAULT_SKIN_ID, SKINS, findSkin } from "./skins";
+import { ACCESSORIES, DEFAULT_SKIN_ID, SKINS, findSkin } from "./skins";
+
+type IdleAction = "none" | "roll" | "bamboo";
 import {
   CACHE_TTL_MS,
   derive,
@@ -149,6 +151,7 @@ function Pet({
   const [snap, setSnap] = useState<UsageSnapshot | null>(null);
   const [now, setNow] = useState(Date.now());
   const [showSettings, setShowSettings] = useState(false);
+  const [idleAction, setIdleAction] = useState<IdleAction>("none");
 
   useEffect(() => {
     invoke<UsageSnapshot>("get_usage_snapshot").then(setSnap).catch(() => {});
@@ -163,6 +166,37 @@ function Pet({
   }, []);
 
   const d = useMemo(() => derive(snap, config.limits, now), [snap, config, now]);
+
+  // Idle micro-actions: every ~18-25s the panda either chews bamboo or rolls.
+  // Skipped when state isn't 'idle' (no rolling around when sleeping or dead).
+  useEffect(() => {
+    if (d.petState !== "idle") {
+      setIdleAction("none");
+      return;
+    }
+    let cancelled = false;
+    let actionTimeout: ReturnType<typeof setTimeout> | undefined;
+
+    const schedule = () => {
+      const wait = 12_000 + Math.random() * 10_000;
+      actionTimeout = setTimeout(() => {
+        if (cancelled) return;
+        const next: IdleAction = Math.random() < 0.55 ? "bamboo" : "roll";
+        setIdleAction(next);
+        const dur = next === "bamboo" ? 4500 : 1600;
+        actionTimeout = setTimeout(() => {
+          if (cancelled) return;
+          setIdleAction("none");
+          schedule();
+        }, dur);
+      }, wait);
+    };
+    schedule();
+    return () => {
+      cancelled = true;
+      if (actionTimeout) clearTimeout(actionTimeout);
+    };
+  }, [d.petState]);
 
   // Update tray title with current usage
   useEffect(() => {
@@ -214,6 +248,7 @@ function Pet({
       <div
         className="character"
         data-state={d.petState}
+        data-action={idleAction}
         data-tauri-drag-region
       >
         <img
@@ -226,6 +261,9 @@ function Pet({
           }}
         />
         <PlaceholderPanda state={d.petState} />
+        {idleAction === "bamboo" && (
+          <img className="bamboo" src={ACCESSORIES.bamboo} alt="" draggable={false} />
+        )}
       </div>
 
       <div className="gauges">

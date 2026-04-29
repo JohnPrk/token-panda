@@ -202,15 +202,21 @@
   z-index: 0;
 }
 .character[data-state="idle"] {
-  animation: bob 2.4s ease-in-out infinite;
+  animation: bob 2.4s ease-in-out infinite, sway 5.3s ease-in-out infinite;
+}
+.character[data-state="idle"][data-action="bamboo"] {
+  animation: chew 0.55s ease-in-out infinite;
+}
+.character[data-state="idle"][data-action="roll"] {
+  animation: roll 1.5s cubic-bezier(.5,.05,.5,.95);
 }
 .character[data-state="tired"] {
-  animation: bob 4s ease-in-out infinite;
+  animation: bob 4s ease-in-out infinite, sway 8s ease-in-out infinite;
   filter: saturate(0.7);
 }
 .character[data-state="sleep"] {
   filter: saturate(0.5) brightness(0.95);
-  transform: rotate(-4deg);
+  animation: snore 3.8s ease-in-out infinite;
 }
 .character[data-state="dead"] {
   filter: grayscale(0.8) brightness(0.8);
@@ -219,6 +225,43 @@
 @keyframes bob {
   0%, 100% { transform: translateY(0); }
   50% { transform: translateY(-4px); }
+}
+@keyframes sway {
+  0%, 100% { transform: rotate(-2deg); }
+  50% { transform: rotate(2deg); }
+}
+@keyframes chew {
+  0%, 100% { transform: translateY(0) scaleY(1); }
+  50% { transform: translateY(-1px) scaleY(0.96); }
+}
+@keyframes roll {
+  0% { transform: rotate(0deg) translateX(0); }
+  50% { transform: rotate(-180deg) translateX(-12px); }
+  100% { transform: rotate(-360deg) translateX(0); }
+}
+@keyframes snore {
+  0%, 100% { transform: rotate(-4deg) translateY(0); }
+  50% { transform: rotate(-4deg) translateY(-2px); }
+}
+
+.character .bamboo {
+  position: absolute;
+  width: 38%;
+  height: 38%;
+  right: -12%;
+  bottom: 22%;
+  z-index: 2;
+  pointer-events: none;
+  animation: bamboo-in 0.4s ease-out, bamboo-wiggle 0.55s ease-in-out 0.4s infinite alternate;
+  transform-origin: 80% 50%;
+}
+@keyframes bamboo-in {
+  from { opacity: 0; transform: translateX(20px) rotate(-30deg); }
+  to { opacity: 1; transform: translateX(0) rotate(-12deg); }
+}
+@keyframes bamboo-wiggle {
+  from { transform: rotate(-12deg); }
+  to { transform: rotate(-22deg) translateX(-2px); }
 }
 
 /* Gauges */

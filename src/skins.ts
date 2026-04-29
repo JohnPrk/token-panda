@@ -3,6 +3,11 @@ import pandaIdle from "./skins/panda/idle.svg";
 import pandaTired from "./skins/panda/tired.svg";
 import pandaSleep from "./skins/panda/sleep.svg";
 import pandaDead from "./skins/panda/dead.svg";
+import pandaBamboo from "./skins/panda/bamboo.svg";
+
+export const ACCESSORIES = {
+  bamboo: pandaBamboo,
+};
 
 export type Skin = {
   id: string;
