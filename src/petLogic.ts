@@ -35,8 +35,18 @@ export function derive(
       weeklyResetMs: null,
     };
   }
-  const fiveHourUsed = clampPct(snap.five_hour_tokens / Math.max(1, limits.fiveHour));
-  const weeklyUsed = clampPct(snap.weekly_tokens / Math.max(1, limits.weekly));
+  // Prefer the live API if it's fresh (<2 minutes old). Anthropic's own
+  // utilization% is authoritative — no calibration needed.
+  const apiFresh =
+    snap.api &&
+    nowMs - Date.parse(snap.api.fetched_at) < 2 * 60 * 1000;
+
+  const fiveHourUsed = apiFresh
+    ? clampPct(snap.api!.five_hour_pct / 100)
+    : clampPct(snap.five_hour_tokens / Math.max(1, limits.fiveHour));
+  const weeklyUsed = apiFresh
+    ? clampPct(snap.api!.weekly_pct / 100)
+    : clampPct(snap.weekly_tokens / Math.max(1, limits.weekly));
   const fiveHourRemaining = 1 - fiveHourUsed;
   const weeklyRemaining = 1 - weeklyUsed;
 
@@ -65,11 +75,19 @@ export function derive(
     }
   }
 
-  const fiveHourResetMs = snap.five_hour_resets_at
-    ? Math.max(0, Date.parse(snap.five_hour_resets_at) - nowMs)
+  const fiveResetSrc =
+    apiFresh && snap.api!.five_hour_resets_at
+      ? snap.api!.five_hour_resets_at
+      : snap.five_hour_resets_at;
+  const weeklyResetSrc =
+    apiFresh && snap.api!.weekly_resets_at
+      ? snap.api!.weekly_resets_at
+      : snap.weekly_resets_at;
+  const fiveHourResetMs = fiveResetSrc
+    ? Math.max(0, Date.parse(fiveResetSrc) - nowMs)
     : null;
-  const weeklyResetMs = snap.weekly_resets_at
-    ? Math.max(0, Date.parse(snap.weekly_resets_at) - nowMs)
+  const weeklyResetMs = weeklyResetSrc
+    ? Math.max(0, Date.parse(weeklyResetSrc) - nowMs)
     : null;
 
   return {

@@ -1,4 +1,8 @@
+mod claude_api;
 mod usage;
+
+use claude_api::ApiUsage;
+use std::sync::OnceLock;
 
 use notify_debouncer_mini::new_debouncer;
 use parking_lot::Mutex;
@@ -251,9 +255,57 @@ struct WatcherState {
     _debouncer: Mutex<Option<Box<dyn std::any::Any + Send>>>,
 }
 
+#[derive(Default)]
+struct ApiState {
+    config: Mutex<Option<(String, String)>>, // (org_id, cookie)
+    latest: Mutex<Option<ApiUsage>>,
+    last_error: Mutex<Option<String>>,
+}
+
+fn api_state() -> &'static ApiState {
+    static CELL: OnceLock<ApiState> = OnceLock::new();
+    CELL.get_or_init(ApiState::default)
+}
+
+#[derive(serde::Serialize, Clone)]
+struct CombinedSnapshot {
+    #[serde(flatten)]
+    inner: usage::UsageSnapshot,
+    api: Option<ApiUsage>,
+    api_error: Option<String>,
+}
+
+fn build_combined_snapshot() -> CombinedSnapshot {
+    let inner = usage::snapshot();
+    let api = api_state().latest.lock().clone();
+    let api_error = api_state().last_error.lock().clone();
+    CombinedSnapshot { inner, api, api_error }
+}
+
 #[tauri::command]
-fn get_usage_snapshot() -> usage::UsageSnapshot {
-    usage::snapshot()
+fn get_usage_snapshot() -> CombinedSnapshot {
+    build_combined_snapshot()
+}
+
+#[tauri::command]
+fn set_api_config(org_id: Option<String>, cookie: Option<String>) -> Result<(), String> {
+    let pair = match (org_id, cookie) {
+        (Some(o), Some(c)) if !o.trim().is_empty() && !c.trim().is_empty() => {
+            Some((o.trim().to_string(), c.trim().to_string()))
+        }
+        _ => None,
+    };
+    *api_state().config.lock() = pair;
+    if api_state().config.lock().is_none() {
+        *api_state().latest.lock() = None;
+        *api_state().last_error.lock() = None;
+    }
+    Ok(())
+}
+
+#[tauri::command]
+fn test_api_config(org_id: String, cookie: String) -> Result<ApiUsage, String> {
+    claude_api::fetch_usage(&org_id, &cookie)
 }
 
 #[tauri::command]
@@ -283,8 +335,28 @@ fn toggle_main_window(app: AppHandle) -> Result<(), String> {
 }
 
 fn emit_snapshot(app: &AppHandle) {
-    let snap = usage::snapshot();
-    let _ = app.emit("usage-update", &snap);
+    let combined = build_combined_snapshot();
+    let _ = app.emit("usage-update", &combined);
+}
+
+fn start_api_poller(app: AppHandle) {
+    std::thread::spawn(move || loop {
+        let cfg = api_state().config.lock().clone();
+        if let Some((org, cookie)) = cfg {
+            match claude_api::fetch_usage(&org, &cookie) {
+                Ok(api) => {
+                    *api_state().latest.lock() = Some(api);
+                    *api_state().last_error.lock() = None;
+                    emit_snapshot(&app);
+                }
+                Err(e) => {
+                    *api_state().last_error.lock() = Some(e);
+                    emit_snapshot(&app);
+                }
+            }
+        }
+        std::thread::sleep(Duration::from_secs(30));
+    });
 }
 
 fn start_watcher(app: AppHandle) -> Arc<WatcherState> {
@@ -467,15 +539,18 @@ pub fn run() {
                 }
             }
 
-            let watcher = start_watcher(handle);
+            let watcher = start_watcher(handle.clone());
             app.manage(watcher);
+            start_api_poller(handle);
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
             get_usage_snapshot,
             claude_projects_path,
             set_tray_title,
-            toggle_main_window
+            toggle_main_window,
+            set_api_config,
+            test_api_config
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

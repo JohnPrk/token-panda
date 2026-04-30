@@ -1,3 +1,11 @@
+export type ApiUsage = {
+  five_hour_pct: number;   // 0-100, utilization (NOT remaining)
+  weekly_pct: number;
+  five_hour_resets_at: string | null;
+  weekly_resets_at: string | null;
+  fetched_at: string;
+};
+
 export type UsageSnapshot = {
   five_hour_tokens: number;
   weekly_tokens: number;
@@ -12,6 +20,17 @@ export type UsageSnapshot = {
   cache_misses_5min: number;
   current_combo: number;
   now: string;
+  /** Live data from claude.ai's internal /api/.../usage endpoint when
+   *  the user has configured org_id + session cookie. Treated as truth
+   *  when fresh (<2min); jsonl-derived numbers are used as fallback. */
+  api: ApiUsage | null;
+  /** Last error string from the API poller, surfaced in Settings. */
+  api_error?: string | null;
+};
+
+export type ApiConfig = {
+  orgId: string;
+  cookie: string;
 };
 
 export type PlanId = "pro" | "max5x" | "max20x" | "custom";

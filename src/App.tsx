@@ -1,9 +1,14 @@
 import { useEffect, useMemo, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
-import type { PlanConfig, PlanId, UsageSnapshot } from "./types";
+import type { ApiConfig, PlanConfig, PlanId, UsageSnapshot } from "./types";
 import { PLAN_PRESETS } from "./types";
-import { loadPlanConfig, savePlanConfig } from "./store";
+import {
+  loadApiConfig,
+  loadPlanConfig,
+  saveApiConfig,
+  savePlanConfig,
+} from "./store";
 import { ACCESSORIES, DEFAULT_SKIN_ID, SKINS, findSkin } from "./skins";
 import {
   CACHE_TTL_MS,
@@ -106,9 +111,16 @@ type View = "loading" | "onboarding" | "pet";
 export default function App() {
   const [view, setView] = useState<View>("loading");
   const [config, setConfig] = useState<PlanConfig | null>(null);
+  const [apiConfig, setApiConfig] = useState<ApiConfig | null>(null);
 
   useEffect(() => {
-    loadPlanConfig().then((cfg) => {
+    Promise.all([loadPlanConfig(), loadApiConfig()]).then(([cfg, api]) => {
+      if (api) {
+        invoke("set_api_config", { orgId: api.orgId, cookie: api.cookie }).catch(
+          () => {},
+        );
+        setApiConfig(api);
+      }
       if (cfg) {
         setConfig(cfg);
         setView("pet");
@@ -133,9 +145,18 @@ export default function App() {
   return (
     <Pet
       config={config!}
+      apiConfig={apiConfig}
       onConfigChange={async (cfg) => {
         await savePlanConfig(cfg);
         setConfig(cfg);
+      }}
+      onApiConfigChange={async (api) => {
+        await saveApiConfig(api);
+        await invoke("set_api_config", {
+          orgId: api?.orgId ?? null,
+          cookie: api?.cookie ?? null,
+        }).catch(() => {});
+        setApiConfig(api);
       }}
     />
   );
@@ -220,10 +241,14 @@ function descOf(p: PlanId) {
 
 function Pet({
   config,
+  apiConfig,
   onConfigChange,
+  onApiConfigChange,
 }: {
   config: PlanConfig;
+  apiConfig: ApiConfig | null;
   onConfigChange: (cfg: PlanConfig) => void;
+  onApiConfigChange: (api: ApiConfig | null) => void;
 }) {
   const [snap, setSnap] = useState<UsageSnapshot | null>(null);
   const [now, setNow] = useState(Date.now());
@@ -431,11 +456,15 @@ function Pet({
       {showSettings && (
         <Settings
           config={config}
+          apiConfig={apiConfig}
           snap={snap}
           onClose={() => setShowSettings(false)}
           onSave={(c) => {
             onConfigChange(c);
             setShowSettings(false);
+          }}
+          onApiSave={(a) => {
+            onApiConfigChange(a);
           }}
         />
       )}
@@ -536,20 +565,25 @@ function toneOf(remaining: number) {
 
 function Settings({
   config,
+  apiConfig,
   snap,
   onClose,
   onSave,
+  onApiSave,
 }: {
   config: PlanConfig;
+  apiConfig: ApiConfig | null;
   snap: UsageSnapshot | null;
   onClose: () => void;
   onSave: (c: PlanConfig) => void;
+  onApiSave: (a: ApiConfig | null) => void;
 }) {
   const [plan, setPlan] = useState<PlanId>(config.plan);
   const [five, setFive] = useState(config.limits.fiveHour);
   const [week, setWeek] = useState(config.limits.weekly);
   const [skin, setSkin] = useState(config.skin);
   const [showCalibrate, setShowCalibrate] = useState(false);
+  const apiActive = !!snap?.api && Date.now() - Date.parse(snap.api.fetched_at) < 2 * 60 * 1000;
 
   useEffect(() => {
     if (plan !== "custom") {
@@ -600,26 +634,37 @@ function Settings({
           </select>
         </label>
 
-        <button
-          className="link"
-          onClick={() => setShowCalibrate((v) => !v)}
-          type="button"
-        >
-          {showCalibrate ? "캘리브레이션 닫기" : "캘리브레이션 도우미"}
-        </button>
+        <ApiSection
+          apiConfig={apiConfig}
+          apiActive={apiActive}
+          apiError={snap?.api_error ?? null}
+          onSave={onApiSave}
+        />
 
-        {showCalibrate && (
-          <Calibrator
-            snap={snap}
-            onApply={(fiveLimit, weekLimit) => {
-              setPlan("custom");
-              setFive(fiveLimit);
-              setWeek(weekLimit);
-            }}
-          />
+        {!apiActive && (
+          <>
+            <button
+              className="link"
+              onClick={() => setShowCalibrate((v) => !v)}
+              type="button"
+            >
+              {showCalibrate ? "캘리브레이션 닫기" : "캘리브레이션 도우미"}
+            </button>
+
+            {showCalibrate && (
+              <Calibrator
+                snap={snap}
+                onApply={(fiveLimit, weekLimit) => {
+                  setPlan("custom");
+                  setFive(fiveLimit);
+                  setWeek(weekLimit);
+                }}
+              />
+            )}
+          </>
         )}
 
-        <Diagnostics snap={snap} />
+        <Diagnostics snap={snap} apiActive={apiActive} />
 
         <div className="settings-actions">
           <button onClick={onClose}>취소</button>
@@ -715,7 +760,13 @@ function Calibrator({
   );
 }
 
-function Diagnostics({ snap }: { snap: UsageSnapshot | null }) {
+function Diagnostics({
+  snap,
+  apiActive,
+}: {
+  snap: UsageSnapshot | null;
+  apiActive: boolean;
+}) {
   if (!snap) {
     return (
       <div className="diagnostics">
@@ -736,13 +787,144 @@ function Diagnostics({ snap }: { snap: UsageSnapshot | null }) {
   return (
     <div className="diagnostics">
       <strong>진단</strong>
-      <div className="diag-row"><span>5h 카운트</span><code>{formatTokens(snap.five_hour_tokens)}</code></div>
-      <div className="diag-row"><span>주간 카운트</span><code>{formatTokens(snap.weekly_tokens)}</code></div>
+      <div className="diag-row">
+        <span>데이터 소스</span>
+        <code>{apiActive ? "API (실시간)" : "jsonl (추정)"}</code>
+      </div>
+      {apiActive && snap.api && (
+        <>
+          <div className="diag-row"><span>API 5h 사용</span><code>{snap.api.five_hour_pct.toFixed(1)}%</code></div>
+          <div className="diag-row"><span>API 주간 사용</span><code>{snap.api.weekly_pct.toFixed(1)}%</code></div>
+          <div className="diag-row">
+            <span>API 갱신</span>
+            <code>{new Date(snap.api.fetched_at).toLocaleTimeString()}</code>
+          </div>
+        </>
+      )}
+      <div className="diag-row"><span>5h 카운트 (jsonl)</span><code>{formatTokens(snap.five_hour_tokens)}</code></div>
+      <div className="diag-row"><span>주간 카운트 (jsonl)</span><code>{formatTokens(snap.weekly_tokens)}</code></div>
       <div className="diag-row"><span>5h 윈도우 시작</span><code>{fiveStart}</code></div>
       <div className="diag-row"><span>마지막 응답</span><code>{lastReq}</code></div>
       <div className="diag-row"><span>마지막 사용자 프롬프트</span><code>{lastUser}</code></div>
       <div className="diag-row"><span>생각 중</span><code>{snap.is_thinking ? "yes" : "no"}</code></div>
       <div className="diag-row"><span>캐시 hit/miss</span><code>{snap.cache_hits_5min} / {snap.cache_misses_5min}</code></div>
+    </div>
+  );
+}
+
+function ApiSection({
+  apiConfig,
+  apiActive,
+  apiError,
+  onSave,
+}: {
+  apiConfig: ApiConfig | null;
+  apiActive: boolean;
+  apiError: string | null;
+  onSave: (a: ApiConfig | null) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const [orgId, setOrgId] = useState(apiConfig?.orgId ?? "");
+  const [cookie, setCookie] = useState(apiConfig?.cookie ?? "");
+  const [testStatus, setTestStatus] = useState<string>("");
+
+  const test = async () => {
+    setTestStatus("테스트 중...");
+    try {
+      const res = await invoke<{ five_hour_pct: number; weekly_pct: number }>(
+        "test_api_config",
+        { orgId: orgId.trim(), cookie: cookie.trim() },
+      );
+      setTestStatus(
+        `✓ 5h ${res.five_hour_pct.toFixed(0)}%, 주간 ${res.weekly_pct.toFixed(0)}%`,
+      );
+    } catch (e: unknown) {
+      setTestStatus(`✗ ${String(e)}`);
+    }
+  };
+
+  return (
+    <div className="api-section">
+      <button
+        className="link"
+        type="button"
+        onClick={() => setOpen((v) => !v)}
+      >
+        {open ? "API 연동 닫기" : `API 연동 ${apiActive ? "(활성)" : "(비활성)"}`}
+      </button>
+      {apiActive && !open && (
+        <p className="api-note ok">
+          ✓ Anthropic API에서 실시간 사용량을 받고 있어요. 캘리는 자동입니다.
+        </p>
+      )}
+      {apiError && !open && (
+        <p className="api-note err">⚠ API 오류: {apiError}</p>
+      )}
+      {open && (
+        <div className="api-form">
+          <p className="api-help">
+            claude.ai 로그인 세션의 <code>sessionKey</code> 쿠키를 사용해
+            <code> /api/organizations/&lt;org&gt;/usage</code> 를 30초마다 조회합니다.
+            모든 데이터는 로컬에만 저장되고 외부로 전송되지 않습니다.
+          </p>
+          <ol className="api-help-list">
+            <li>claude.ai 접속 → 개발자도구(⌘⌥I) → Network 탭</li>
+            <li>아무 요청 클릭 → Request Headers에서 <code>cookie</code> 라인 전체 복사</li>
+            <li>Org ID는 같은 페이지 URL의 <code>/organizations/&lt;UUID&gt;/</code>에 있는 UUID</li>
+          </ol>
+          <label>
+            Organization ID
+            <input
+              type="text"
+              placeholder="63e058d5-142c-4368-bca3-39d64d78b4f5"
+              value={orgId}
+              onChange={(e) => setOrgId(e.target.value)}
+              spellCheck={false}
+            />
+          </label>
+          <label>
+            세션 쿠키 (sessionKey 포함)
+            <textarea
+              placeholder="sessionKey=sk-ant-sid01-...; intercom-session-...=..."
+              value={cookie}
+              onChange={(e) => setCookie(e.target.value)}
+              rows={3}
+              spellCheck={false}
+            />
+          </label>
+          <div className="api-actions">
+            <button type="button" onClick={test}>
+              테스트
+            </button>
+            <button
+              type="button"
+              className="primary slim"
+              onClick={() => {
+                if (orgId.trim() && cookie.trim()) {
+                  onSave({ orgId: orgId.trim(), cookie: cookie.trim() });
+                  setTestStatus("저장됨");
+                }
+              }}
+            >
+              저장
+            </button>
+            {apiConfig && (
+              <button
+                type="button"
+                onClick={() => {
+                  onSave(null);
+                  setOrgId("");
+                  setCookie("");
+                  setTestStatus("연동 해제됨");
+                }}
+              >
+                연동 해제
+              </button>
+            )}
+          </div>
+          {testStatus && <p className="api-status">{testStatus}</p>}
+        </div>
+      )}
     </div>
   );
 }
