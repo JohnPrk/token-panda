@@ -8,6 +8,15 @@ import pandaTired from "./skins/panda/tired.png";
 import pandaSleepy from "./skins/panda/sleepy.png";
 import pandaDead from "./skins/panda/dead.png";
 
+// Placeholder for the `disconnected` state — shown when claude.ai's
+// API rejects our request (expired cookie, Cloudflare challenge, etc.).
+// Currently reuses apple.png as a visibly different stand-in so the
+// user can see "something is off". To finish this state, drop a real
+// `src/skins/panda/disconnected.png` (256×256, transparent PNG) into
+// the panda folder and switch this import to:
+//   import pandaDisconnected from "./skins/panda/disconnected.png";
+import pandaDisconnected from "./skins/panda/apple.png";
+
 import pandaBamboo from "./skins/panda/bamboo.png";
 import pandaApple from "./skins/panda/apple.png";
 import pandaDumbbell from "./skins/panda/dumbbell.png";
@@ -57,6 +66,7 @@ export const SKINS: Skin[] = [
       tired: pandaTired,
       sleepy: pandaSleepy,
       dead: pandaDead,
+      disconnected: pandaDisconnected,
     },
     // No motion GIFs yet — drop files into src/skins/panda/<action>.gif and
     // wire them up here (e.g. `roll: pandaRollGif`) to enable per-action

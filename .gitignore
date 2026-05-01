@@ -26,3 +26,7 @@ dist-ssr
 # Tauri / Rust
 src-tauri/target
 src-tauri/gen
+
+# dev-cycle workflow (local-only)
+features.md
+version.md

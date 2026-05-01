@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { emit, listen } from "@tauri-apps/api/event";
 import { getCurrentWindow } from "@tauri-apps/api/window";
-import type { ApiConfig, PlanConfig, PlanId, UsageSnapshot } from "./types";
+import type { ApiConfig, PlanConfig, UsageSnapshot } from "./types";
 import { PLAN_PRESETS } from "./types";
 import {
   loadApiConfig,
@@ -16,7 +16,6 @@ import {
   derive,
   formatRemain,
   formatResetCountdown,
-  formatTokens,
 } from "./petLogic";
 import { maybeNotify, resetThreshold } from "./notifier";
 import "./App.css";
@@ -43,6 +42,8 @@ function allowedActionsFor(state: string) {
     case "sleepy":
       names = sluggish;
       break;
+    // dead and disconnected stay still — bouncing around while quota
+    // is exhausted or API is broken would feel wrong.
     default:
       return [];
   }
@@ -110,19 +111,23 @@ const REMAINING_THRESHOLDS: Array<[number, string]> = [
   [0.0, "0%"],
 ];
 
-type View = "loading" | "onboarding" | "pet";
+type View = "loading" | "pet";
 
-// Two windows share this bundle: the pinned panel ("main") and the
-// settings popup ("settings"). The popup is launched with ?view=settings
-// so we can branch the React tree at the top.
-function isSettingsWindow(): boolean {
-  return new URLSearchParams(window.location.search).get("view") === "settings";
+// Three windows share this bundle: the pinned pet panel ("main"), the
+// settings popup ("settings"), and the first-run onboarding popup
+// ("onboarding"). The non-main ones are launched with ?view=<name> so
+// we branch at the top of the React tree.
+function viewFromUrl(): "settings" | "onboarding" | null {
+  const v = new URLSearchParams(window.location.search).get("view");
+  if (v === "settings") return "settings";
+  if (v === "onboarding") return "onboarding";
+  return null;
 }
 
 export default function App() {
-  if (isSettingsWindow()) {
-    return <SettingsApp />;
-  }
+  const v = viewFromUrl();
+  if (v === "settings") return <SettingsApp />;
+  if (v === "onboarding") return <OnboardingApp />;
   return <PetApp />;
 }
 
@@ -141,7 +146,20 @@ function PetApp() {
         setConfig(cfg);
         setView("pet");
       } else {
-        setView("onboarding");
+        // First launch — silently save a default plan so the rest of
+        // the pet logic has something to render against, then pop the
+        // standalone onboarding window. The character picker and API
+        // form live there, so the pet stops needing a plan modal.
+        const defaultCfg: PlanConfig = {
+          plan: "max5x",
+          limits: PLAN_PRESETS.max5x,
+          skin: DEFAULT_SKIN_ID,
+        };
+        savePlanConfig(defaultCfg).then(() => {
+          setConfig(defaultCfg);
+          setView("pet");
+          invoke("open_onboarding_window").catch(() => {});
+        });
       }
     });
   }, []);
@@ -162,17 +180,10 @@ function PetApp() {
   }, []);
 
   if (view === "loading") return null;
-  if (view === "onboarding") {
-    return (
-      <Onboarding
-        onDone={async (cfg) => {
-          await savePlanConfig(cfg);
-          setConfig(cfg);
-          setView("pet");
-        }}
-      />
-    );
-  }
+  // Onboarding lives in its own window now (open_onboarding_window).
+  // The pet panel always renders against `config` — even on first
+  // launch, where we save a default plan synchronously above before
+  // popping the onboarding window.
   return <Pet config={config!} />;
 }
 
@@ -238,81 +249,210 @@ function SettingsApp() {
   );
 }
 
-function Onboarding({ onDone }: { onDone: (cfg: PlanConfig) => void }) {
-  const [plan, setPlan] = useState<PlanId>("max5x");
-  const [customFive, setCustomFive] = useState(5_000_000);
-  const [customWeek, setCustomWeek] = useState(35_000_000);
+// First-launch welcome window — opens automatically (from PetApp's
+// boot when no PlanConfig is saved) and walks the user through the
+// two real choices the app needs: a character and the claude.ai
+// session credentials. There's no plan selection anymore — quota %
+// comes straight from claude.ai's API once the user pastes a cookie.
+function OnboardingApp() {
+  const [skin, setSkin] = useState<string>(DEFAULT_SKIN_ID);
+  const [orgId, setOrgId] = useState("");
+  const [cookie, setCookie] = useState("");
+  const [testStatus, setTestStatus] = useState<string>("");
+  const [step, setStep] = useState<1 | 2>(1);
 
-  const submit = () => {
-    const limits =
-      plan === "custom"
-        ? { fiveHour: customFive, weekly: customWeek }
-        : PLAN_PRESETS[plan];
-    onDone({ plan, limits, skin: DEFAULT_SKIN_ID });
+  const test = async () => {
+    if (!orgId.trim() || !cookie.trim()) {
+      setTestStatus("Org ID와 쿠키를 모두 채워주세요.");
+      return;
+    }
+    setTestStatus("테스트 중...");
+    try {
+      const res = await invoke<{ five_hour_pct: number; weekly_pct: number }>(
+        "test_api_config",
+        { orgId: orgId.trim(), cookie: cookie.trim() },
+      );
+      setTestStatus(
+        `✓ 5h ${res.five_hour_pct.toFixed(0)}% · 주간 ${res.weekly_pct.toFixed(0)}%`,
+      );
+    } catch (e: unknown) {
+      setTestStatus(`✗ ${String(e)}`);
+    }
+  };
+
+  const closeSelf = async () => {
+    try {
+      await getCurrentWindow().close();
+    } catch {
+      // best-effort
+    }
+  };
+
+  const finish = async () => {
+    // Save plan with default presets (legacy field; not user-visible
+    // anymore in API-only mode) plus the chosen skin.
+    const cfg: PlanConfig = {
+      plan: "max5x",
+      limits: PLAN_PRESETS.max5x,
+      skin,
+    };
+    await savePlanConfig(cfg);
+    if (orgId.trim() && cookie.trim()) {
+      const api: ApiConfig = { orgId: orgId.trim(), cookie: cookie.trim() };
+      await saveApiConfig(api);
+      await invoke("set_api_config", api).catch(() => {});
+    }
+    await emit("config-changed");
+    await closeSelf();
   };
 
   return (
-    <div className="onboarding">
-      <h1>Claude Desk Pet</h1>
-      <p className="sub">너의 토큰 잔량을 알려줄게.</p>
+    <div className="onboarding-window">
+      <div className="onboarding-card">
+        <header className="onboarding-header">
+          <h1>토큰 판다에 오신 걸 환영해요 🎋</h1>
+          <p className="onboarding-sub">
+            Claude의 가장 큰 단점은 토큰이 자주 부족하다는 것 — 토큰 판다는
+            데스크톱 한 켠에 앉아 5시간/주간 잔량을 실시간으로 보여주고,
+            <strong> 캐시가 끊기기 전에 미리 알려줘서 토큰을 아낄 수 있게</strong> 도와줍니다.
+          </p>
+          <ol className="onboarding-stepper" aria-hidden="true">
+            <li className={step === 1 ? "active" : "done"}>1. 캐릭터</li>
+            <li className={step === 2 ? "active" : ""}>2. claude.ai 연동</li>
+          </ol>
+        </header>
 
-      <div className="plans">
-        {(["pro", "max5x", "max20x", "custom"] as PlanId[]).map((p) => (
-          <button
-            key={p}
-            className={`plan ${plan === p ? "selected" : ""}`}
-            onClick={() => setPlan(p)}
-          >
-            <strong>{labelOf(p)}</strong>
-            <span>{descOf(p)}</span>
-          </button>
-        ))}
+        {step === 1 && (
+          <section className="onboarding-step">
+            <h2>1. 어떤 친구로 할까요?</h2>
+            <p className="onboarding-step-desc">
+              데스크톱 모서리에 살게 될 캐릭터를 골라주세요. 나중에
+              `설정`에서 언제든 바꿀 수 있어요.
+            </p>
+            <div className="skin-grid">
+              {SKINS.map((s) => (
+                <button
+                  type="button"
+                  key={s.id}
+                  className={`skin-tile ${skin === s.id ? "selected" : ""}`}
+                  onClick={() => setSkin(s.id)}
+                  title={s.name}
+                >
+                  <img src={s.frames.good} alt={s.name} />
+                  <span>{s.name}</span>
+                </button>
+              ))}
+            </div>
+            <div className="onboarding-actions">
+              <button type="button" onClick={closeSelf} className="ghost">
+                나중에 할게요
+              </button>
+              <button
+                type="button"
+                className="primary"
+                onClick={() => setStep(2)}
+              >
+                다음
+              </button>
+            </div>
+          </section>
+        )}
+
+        {step === 2 && (
+          <section className="onboarding-step">
+            <h2>2. claude.ai 연동</h2>
+            <p className="onboarding-step-desc">
+              claude.ai의 사용량 페이지가 쓰는 것과 같은 내부 API를 직접 호출해서
+              <strong> Anthropic 공식 utilization%</strong> 그대로 가져옵니다.
+              연동 정보는 이 컴퓨터 안에만 저장되고, 외부 서버 어디에도
+              전송하지 않아요.
+            </p>
+
+            <div className="onboarding-howto">
+              <h3>① Org ID 가져오기</h3>
+              <ol>
+                <li>
+                  <a href="https://claude.ai/settings/account" target="_blank" rel="noreferrer">
+                    claude.ai/settings/account
+                  </a>
+                  에 접속합니다.
+                </li>
+                <li>"계정" 섹션의 <strong>조직 ID</strong> 값 복사
+                  <br />(예: <code>63e058d5-142c-4368-bca3-39d64d78b4f5</code>)</li>
+              </ol>
+
+              <h3>② 세션 쿠키 가져오기</h3>
+              <ol>
+                <li>
+                  <a href="https://claude.ai/settings/usage" target="_blank" rel="noreferrer">
+                    claude.ai/settings/usage
+                  </a>
+                  에 접속해 한 번 새로고침합니다.
+                </li>
+                <li>
+                  <code>⌘⌥I</code>로 개발자 도구 → <strong>Network</strong> 탭 열기
+                </li>
+                <li>
+                  목록에서 <code>usage</code> 요청을 클릭 → Headers 탭 →
+                  Request Headers의 <code>cookie:</code> 줄을 <strong>통째로</strong> 복사
+                </li>
+                <li>아래 칸에 그대로 붙여넣기</li>
+              </ol>
+              <p className="onboarding-howto-note">
+                실제로 쓰이는 쿠키는 5개(<code>sessionKey</code>, <code>cf_clearance</code>, <code>__cf_bm</code>, <code>_cfuvid</code>, <code>routingHint</code>)뿐이고
+                나머지는 무시됩니다. 그러니 한 줄을 통째로 복붙해도 안전해요.
+              </p>
+            </div>
+
+            <label>
+              Organization ID
+              <input
+                type="text"
+                placeholder="63e058d5-142c-4368-bca3-39d64d78b4f5"
+                value={orgId}
+                onChange={(e) => setOrgId(e.target.value)}
+                spellCheck={false}
+              />
+            </label>
+            <label>
+              세션 쿠키
+              <textarea
+                placeholder="sessionKey=sk-ant-sid02-...; cf_clearance=...; __cf_bm=...; _cfuvid=...; routingHint=[sk-ant-rh-...]"
+                value={cookie}
+                onChange={(e) => setCookie(e.target.value)}
+                rows={4}
+                spellCheck={false}
+              />
+            </label>
+
+            <div className="onboarding-test-row">
+              <button type="button" onClick={test}>
+                연결 테스트
+              </button>
+              {testStatus && <span className="onboarding-test-status">{testStatus}</span>}
+            </div>
+
+            <div className="onboarding-security">
+              ⚠️ Org ID + 쿠키는 본인 claude.ai 세션의 자격증명입니다. 외부에
+              유출되면 다른 사람이 사용량을 조회·소모할 수 있으니
+              <strong>공유하지 마세요.</strong>
+              쿠키가 만료되면 토큰 판다가 자동으로 감지하고
+              이 창을 다시 열어 새 쿠키를 요청합니다.
+            </div>
+
+            <div className="onboarding-actions">
+              <button type="button" onClick={() => setStep(1)} className="ghost">
+                이전
+              </button>
+              <button type="button" className="primary" onClick={finish}>
+                {orgId.trim() && cookie.trim() ? "저장하고 시작" : "건너뛰고 시작"}
+              </button>
+            </div>
+          </section>
+        )}
       </div>
-
-      {plan === "custom" && (
-        <div className="custom-fields">
-          <label>
-            5시간 한도 (tokens)
-            <input
-              type="number"
-              value={customFive}
-              onChange={(e) => setCustomFive(Number(e.target.value))}
-            />
-          </label>
-          <label>
-            주간 한도 (tokens)
-            <input
-              type="number"
-              value={customWeek}
-              onChange={(e) => setCustomWeek(Number(e.target.value))}
-            />
-          </label>
-        </div>
-      )}
-
-      <button className="primary" onClick={submit}>
-        시작
-      </button>
-      <p className="hint">
-        한도는 추정치입니다. 설정에서 캘리브레이션할 수 있어요.
-      </p>
     </div>
   );
-}
-
-function labelOf(p: PlanId) {
-  return p === "pro"
-    ? "Pro"
-    : p === "max5x"
-    ? "Max 5×"
-    : p === "max20x"
-    ? "Max 20×"
-    : "Custom";
-}
-function descOf(p: PlanId) {
-  if (p === "custom") return "직접 입력";
-  const l = PLAN_PRESETS[p];
-  return `${formatTokens(l.fiveHour)} / 5h · ${formatTokens(l.weekly)} / 주`;
 }
 
 function Pet({
@@ -403,16 +543,18 @@ function Pet({
     };
   }, [d.petState]);
 
-  // Tray title — battery style, always based on the 5h window so the
-  // menubar % matches the "5h" row in the bubble. Weekly is reflected in
-  // the pet state (dead) but not in the headline number.
+  // Tray title — bamboo theme matching the brand. The bamboo glyph
+  // (🎋) on full, drying out as remaining drops, and a dead leaf when
+  // both windows are exhausted. Title-only — no icon — so there's no
+  // small white square next to the percentage on macOS.
   useEffect(() => {
     const remaining = d.fiveHourRemaining;
     const emoji =
-      d.petState === "dead" ? "💀" :
-      remaining <= 0.15 ? "😴" :
-      remaining <= 0.49 ? "🪫" :
-      "🔋";
+      d.petState === "disconnected" ? "🔌" :
+      d.petState === "dead" ? "🍂" :
+      remaining <= 0.15 ? "🥱" :
+      remaining <= 0.49 ? "🌾" :
+      "🎋";
     const title = `${emoji} ${Math.round(remaining * 100)}%`;
     invoke("set_tray_title", { title }).catch(() => {});
   }, [d.fiveHourRemaining, d.petState]);
@@ -798,9 +940,17 @@ function ApiSection({
             </div>
           </div>
           <p>
-            <strong>로컬에서만 동작</strong>해요. 입력한 Org ID와 쿠키는 이 컴퓨터에만 저장되고,
-            앱이 직접 <code>claude.ai/api/.../usage</code>를 30초마다 조회해 사용량을 가져옵니다.
-            외부 서버로 전송하지 않아요.
+            🔒 <strong>이 컴퓨터 안에서만 돌아가요.</strong> Org ID와 쿠키는
+            macOS 사용자 폴더의 설정 파일
+            (<code>~/Library/Application Support/com.tnew.clauddeskpet/</code>) 한 곳에만 저장되고,
+            앱이 직접 <code>claude.ai/api/.../usage</code>를 30초마다 호출해 사용량을 가져옵니다.
+            <strong>외부 서버·분석 도구·텔레메트리 어디에도 전송하지 않아요.</strong>
+            "연동 해제"를 누르면 저장된 값은 즉시 지워집니다.
+          </p>
+          <p>
+            ⚠️ 단, 이 쿠키는 claude.ai 세션 전체 권한을 가지므로
+            <strong>다른 사람에게 보내거나 공용 컴퓨터에 두지 마세요.</strong>
+            의심스러운 곳에 붙여 넣지도 마시고요.
           </p>
           <p>
             쿠키가 만료되거나 무효해지면 (HTTP 401·403·404) 다음 폴링에서 감지해

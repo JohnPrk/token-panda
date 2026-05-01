@@ -609,6 +609,221 @@
     linear-gradient(180deg, #7fc66e 0%, #4f9c46 100%);
 }
 
+/* Standalone onboarding window — first-launch welcome (open_onboarding_window
+   in Rust). Two-step flow: pick character → claude.ai 연동. The header
+   and stepper are visually heavier than Settings because this is the
+   only place we have to give a complete cold-start explanation. */
+.onboarding-window {
+  position: fixed;
+  inset: 0;
+  background:
+    radial-gradient(ellipse at top left, rgba(74, 60, 130, 0.55), transparent 60%),
+    radial-gradient(ellipse at bottom right, rgba(60, 60, 75, 0.55), transparent 60%),
+    linear-gradient(160deg, #2f2940 0%, #25232c 100%);
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  padding: 24px;
+  overflow: auto;
+  color: #ececf1;
+  user-select: text;
+  -webkit-user-select: text;
+  font-family: inherit;
+}
+.onboarding-card {
+  width: 100%;
+  max-width: 600px;
+  margin: 0 auto;
+  flex: 1 1 auto;
+  background: #fff;
+  color: #1f1d28;
+  border-radius: 14px;
+  border: 1px solid #d8d4ec;
+  box-shadow: 0 8px 28px rgba(0, 0, 0, 0.4);
+  padding: 28px;
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+  min-width: 0;
+}
+.onboarding-card,
+.onboarding-card * {
+  min-width: 0;
+  max-width: 100%;
+}
+.onboarding-header h1 {
+  margin: 0 0 8px;
+  font-size: 18px;
+  font-weight: 700;
+}
+.onboarding-sub {
+  margin: 0 0 14px;
+  font-size: 12.5px;
+  color: #4a4658;
+  line-height: 1.6;
+  word-break: keep-all;
+  overflow-wrap: anywhere;
+}
+.onboarding-stepper {
+  display: flex;
+  gap: 10px;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  font-size: 11px;
+  color: #888;
+}
+.onboarding-stepper li {
+  padding: 4px 8px;
+  border-radius: 999px;
+  background: #f1eef9;
+}
+.onboarding-stepper li.active {
+  background: #6b4cff;
+  color: #fff;
+  font-weight: 600;
+}
+.onboarding-stepper li.done {
+  background: #d8d4ec;
+  color: #4a36c2;
+}
+.onboarding-step {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.onboarding-step h2 {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 700;
+}
+.onboarding-step h3 {
+  margin: 8px 0 4px;
+  font-size: 12px;
+  font-weight: 700;
+  color: #4a36c2;
+}
+.onboarding-step-desc {
+  margin: 0;
+  font-size: 12px;
+  color: #555;
+  line-height: 1.6;
+  word-break: keep-all;
+  overflow-wrap: anywhere;
+}
+.onboarding-howto {
+  background: #f6f5fb;
+  border: 1px solid #e3dffa;
+  border-radius: 10px;
+  padding: 12px 14px;
+  font-size: 12px;
+  color: #333;
+  line-height: 1.6;
+  word-break: keep-all;
+  overflow-wrap: anywhere;
+}
+.onboarding-howto ol {
+  margin: 0 0 6px;
+  padding-left: 20px;
+}
+.onboarding-howto li { margin-bottom: 3px; }
+.onboarding-howto a {
+  color: #6b4cff;
+  text-decoration: underline;
+}
+.onboarding-howto code {
+  background: #ece9f8;
+  color: #2a1a55;
+  padding: 1px 5px;
+  border-radius: 3px;
+  font-family: ui-monospace, monospace;
+  font-size: 11px;
+}
+.onboarding-howto-note {
+  margin: 6px 0 0;
+  font-size: 11px;
+  color: #666;
+  line-height: 1.5;
+}
+.onboarding-card label {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 12px;
+  color: #444;
+}
+.onboarding-card input,
+.onboarding-card textarea {
+  font-family: ui-monospace, monospace;
+  font-size: 11.5px;
+  padding: 7px 9px;
+  border: 1px solid #c2bccf;
+  border-radius: 6px;
+  width: 100%;
+  box-sizing: border-box;
+  word-break: keep-all;
+  overflow-wrap: anywhere;
+}
+.onboarding-card textarea { resize: vertical; min-height: 70px; }
+.onboarding-test-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 11.5px;
+  flex-wrap: wrap;
+}
+.onboarding-test-row button {
+  padding: 6px 14px;
+  border-radius: 6px;
+  border: 1px solid #c2bccf;
+  background: #fff;
+  cursor: pointer;
+  font: inherit;
+  font-size: 11.5px;
+}
+.onboarding-test-status {
+  color: #444;
+  flex: 1 1 auto;
+}
+.onboarding-security {
+  font-size: 11.5px;
+  color: #774a00;
+  background: #fff5d9;
+  border: 1px solid #f0d68a;
+  border-radius: 8px;
+  padding: 10px 12px;
+  line-height: 1.55;
+  word-break: keep-all;
+  overflow-wrap: anywhere;
+}
+.onboarding-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 6px;
+}
+.onboarding-actions button {
+  padding: 8px 18px;
+  border-radius: 8px;
+  border: 1px solid #c2bccf;
+  background: #fff;
+  cursor: pointer;
+  font: inherit;
+  font-size: 12.5px;
+  font-weight: 500;
+}
+.onboarding-actions .primary {
+  background: #6b4cff;
+  color: #fff;
+  border-color: #6b4cff;
+}
+.onboarding-actions .ghost {
+  background: transparent;
+  color: #777;
+  border-color: transparent;
+}
+
 /* Standalone settings window — wraps the Settings panel inside its own
    ordinary OS window (created by open_settings_window in Rust). Replaces
    the dim overlay on top of the pet, which had to fight panel-level text
@@ -646,8 +861,14 @@
    matching padding on top and bottom (24px) keeps the title and the
    action buttons equidistant from the card edges. */
 .settings-window .settings {
+  /* Stretch to the full height of the column-flex parent so the card
+     reaches the bottom of the window instead of stopping at content
+     height. min-width: 0 + the descendant cap below stop long Korean
+     placeholders from forcing a horizontal scroll. */
+  flex: 1 1 auto;
   width: 100%;
   max-width: 560px;
+  min-width: 0;
   margin: 0 auto;
   max-height: none;
   background: #dcd9e3;
@@ -655,9 +876,34 @@
   border: 1px solid #c2bccf;
   box-shadow: 0 6px 24px rgba(0, 0, 0, 0.35);
   padding: 24px;
+  box-sizing: border-box;
+  overflow-y: auto;
   /* Override the upstream .settings { gap: 8px } so sibling sections
      (skin picker → API section → action row) can breathe. */
   gap: 14px;
+}
+/* Belt-and-suspenders text wrapping: Korean has no inter-word spaces,
+   so default break rules can leak content past the card's right edge
+   when the API-section copy or test/error preview gets long. */
+.settings-window .settings p,
+.settings-window .settings li,
+.settings-window .settings .api-help-popup,
+.settings-window .settings .api-note,
+.settings-window .settings .api-help,
+.settings-window .settings .api-help-list,
+.settings-window .settings code,
+.settings-window .settings textarea,
+.settings-window .settings input,
+.settings-window .settings .api-status {
+  word-break: keep-all;
+  overflow-wrap: anywhere;
+  white-space: normal;
+  max-width: 100%;
+  box-sizing: border-box;
+}
+.settings-window .settings textarea,
+.settings-window .settings input {
+  width: 100%;
 }
 .settings-window .settings,
 .settings-window .settings * {

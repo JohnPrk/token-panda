@@ -57,14 +57,15 @@ export const PLAN_PRESETS: Record<Exclude<PlanId, "custom">, PlanLimits> = {
 /// Visual tier of the pet, derived from the LOWEST remaining %
 /// (min of 5h-remaining and weekly-remaining). Filenames in
 /// `src/skins/<skin>/` mirror these names 1:1.
-///   full   90-100%
-///   high   77-90%
-///   good   63-77%
-///   mid    49-63%
-///   low    33-49%
-///   tired  15-33%
-///   sleepy 0-15%   (also when 5h = 0%)
-///   dead   weekly = 0%
+///   full          90-100%
+///   high          77-90%
+///   good          63-77%
+///   mid           49-63%
+///   low           33-49%
+///   tired         15-33%
+///   sleepy        0-15%   (also when 5h = 0%)
+///   dead          weekly = 0%
+///   disconnected  API 끊김(쿠키 만료/Cloudflare 차단 등) — quota와 별개로 우선 표시
 export type PetState =
   | "full"
   | "high"
@@ -73,4 +74,5 @@ export type PetState =
   | "low"
   | "tired"
   | "sleepy"
-  | "dead";
+  | "dead"
+  | "disconnected";

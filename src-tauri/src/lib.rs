@@ -480,7 +480,7 @@ fn open_settings_window(app: AppHandle) -> Result<(), String> {
     // two lines and clipped the cookie-flow diagram inside the help
     // popup. 600 wide gives both sub-elements room without scrolling.
     let builder = WebviewWindowBuilder::new(&app, "settings", url)
-        .title("Claude Desk Pet — 설정")
+        .title("토큰 판다 — 설정")
         .inner_size(600.0, 680.0)
         .min_inner_size(520.0, 560.0)
         .resizable(true)
@@ -488,6 +488,39 @@ fn open_settings_window(app: AppHandle) -> Result<(), String> {
         .transparent(false)
         .always_on_top(false)
         .skip_taskbar(false)
+        .visible(true);
+
+    let window = builder.build().map_err(|e| e.to_string())?;
+    let _ = window.set_focus();
+    Ok(())
+}
+
+/// Open the standalone Onboarding window — first-launch welcome that
+/// walks the user through choosing a character + entering Org ID and
+/// session cookie. Same separate-WebviewWindow pattern as Settings so
+/// text inputs aren't blocked by the pet panel's window level. Bigger
+/// canvas than settings (560×720) so the welcome copy + step-by-step
+/// instructions can breathe.
+#[tauri::command]
+fn open_onboarding_window(app: AppHandle) -> Result<(), String> {
+    if let Some(existing) = app.get_webview_window("onboarding") {
+        let _ = existing.show();
+        let _ = existing.unminimize();
+        let _ = existing.set_focus();
+        return Ok(());
+    }
+
+    let url = WebviewUrl::App("index.html?view=onboarding".into());
+    let builder = WebviewWindowBuilder::new(&app, "onboarding", url)
+        .title("토큰 판다 — 시작하기")
+        .inner_size(640.0, 760.0)
+        .min_inner_size(540.0, 620.0)
+        .resizable(true)
+        .decorations(true)
+        .transparent(false)
+        .always_on_top(false)
+        .skip_taskbar(false)
+        .center()
         .visible(true);
 
     let window = builder.build().map_err(|e| e.to_string())?;
@@ -620,10 +653,15 @@ fn build_tray(app: &AppHandle) -> tauri::Result<()> {
         &[&show_item, &refresh_item, &settings_item, &quit_item],
     )?;
 
+    // Title-only tray. Just omitting `.icon(...)` doesn't work — Tauri
+    // silently falls back to the default app icon, which rendered as a
+    // tiny white-ish square next to the percentage. Force a 1×1 fully
+    // transparent RGBA image so the menu bar slot exists but draws
+    // nothing visible. The bamboo glyph in `.title()` is the only mark.
+    let blank_icon = tauri::image::Image::new_owned(vec![0, 0, 0, 0], 1, 1);
     let _tray = TrayIconBuilder::with_id("main-tray")
-        .icon(app.default_window_icon().unwrap().clone())
-        .icon_as_template(true)
-        .title("🐼 …")
+        .icon(blank_icon)
+        .title("🎋 …")
         .menu(&menu)
         .on_menu_event(|app, event| match event.id.as_ref() {
             "show" => {
@@ -752,7 +790,8 @@ pub fn run() {
             test_api_config,
             refresh_usage,
             settings_focus,
-            open_settings_window
+            open_settings_window,
+            open_onboarding_window
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

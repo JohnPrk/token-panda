@@ -53,9 +53,14 @@ export function derive(
   // Pet state from the LOWEST remaining % across both windows. Tier
   // boundaries match the per-state PNG ranges in src/skins/<skin>/.
   // weekly = 0 short-circuits to dead (weekly0.png).
+  // `disconnected` overrides everything else: when the poller logged
+  // a recent error and the API snapshot isn't fresh, quota numbers
+  // are stale and the user almost certainly needs to renew cookies.
   let petState: PetState;
+  const apiBroken = !apiFresh && !!snap.api_error;
   const lowest = Math.min(fiveHourRemaining, weeklyRemaining);
-  if (weeklyRemaining <= 0) petState = "dead";
+  if (apiBroken) petState = "disconnected";
+  else if (weeklyRemaining <= 0) petState = "dead";
   else if (lowest <= 0.15) petState = "sleepy";  // 0–15% (also 5h=0%)
   else if (lowest <= 0.33) petState = "tired";   // 15–33%
   else if (lowest <= 0.49) petState = "low";     // 33–49%
