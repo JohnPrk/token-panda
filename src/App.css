@@ -455,23 +455,27 @@
   filter: none;
 }
 .disconnected-sign {
+  /* 캐릭터(130×130) 앞에 들고 있는 듯이 보여야 하므로 character div의
+     stacking context 안에서 가장 앞으로 끌어올린다. 사이즈는 캐릭터 폭과
+     같게 하고, 입(약 35% from top) ~ 발(bottom)까지 = 박스 높이의 65%만
+     차지하도록 height를 명시. width는 그에 맞춰 비율 유지(auto). */
   position: absolute;
-  /* 입 ~ 발: 캐릭터 박스 기준 top 40%부터 bottom -2%까지 — 표지판 정사각
-     이미지를 width로 맞추고 height auto로 비율 유지. */
-  bottom: -2%;
+  bottom: 0;
   left: 50%;
-  width: 130%;
-  height: auto;
+  height: 65%;
+  width: auto;
   transform: translateX(-50%);
-  z-index: 5;
+  transform-origin: 50% 100%;
+  z-index: 100;
   pointer-events: none;
   animation: sign-sway 3.6s ease-in-out infinite;
-  filter: drop-shadow(0 6px 8px rgba(0, 0, 0, 0.6));
+  filter: drop-shadow(0 4px 6px rgba(0, 0, 0, 0.55));
 }
 @keyframes sign-sway {
-  /* 표지판이 바람에 살짝 기우뚱 — translateX(-50%) 유지하면서 rotate */
-  0%, 100% { transform: translateX(-50%) rotate(-1.2deg); }
-  50%      { transform: translateX(-50%) rotate(1.2deg);  }
+  /* 표지판이 바람에 살짝 기우뚱 — translateX(-50%) 유지하면서 rotate.
+     transform-origin이 50% 100%(밑변 중앙)이라 막대기에 꽂힌 듯 흔들림. */
+  0%, 100% { transform: translateX(-50%) rotate(-1.5deg); }
+  50%      { transform: translateX(-50%) rotate(1.5deg);  }
 }
 
 /* Action overrides — keyed only on data-action so they apply across
