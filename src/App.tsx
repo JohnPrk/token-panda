@@ -26,6 +26,9 @@ function allowedActionsFor(state: string) {
   const energetic = new Set(["roll", "jump", "run"]);
   const calm = new Set(["scratch", "wobble", "squish"]);
   const sluggish = new Set(["scratch", "wobble"]);
+  // sleepy는 자고 있는 상태라서 머리 위 대나무를 들고 긁는 건 어색함.
+  // wobble(좌우 기우뚱)만 남겨 살짝 뒤척이는 정도로.
+  const sleepyOnly = new Set(["wobble"]);
 
   let names: Set<string>;
   switch (state) {
@@ -39,8 +42,10 @@ function allowedActionsFor(state: string) {
       break;
     case "low":
     case "tired":
-    case "sleepy":
       names = sluggish;
+      break;
+    case "sleepy":
+      names = sleepyOnly;
       break;
     // dead and disconnected stay still — bouncing around while quota
     // is exhausted or API is broken would feel wrong.

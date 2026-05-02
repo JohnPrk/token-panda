@@ -455,27 +455,27 @@
   filter: none;
 }
 .disconnected-sign {
-  /* 캐릭터(130×130) 앞에 들고 있는 듯이 보여야 하므로 character div의
-     stacking context 안에서 가장 앞으로 끌어올린다. 사이즈는 캐릭터 폭과
-     같게 하고, 입(약 35% from top) ~ 발(bottom)까지 = 박스 높이의 65%만
-     차지하도록 height를 명시. width는 그에 맞춰 비율 유지(auto). */
+  /* 표지판이 캐릭터 박스를 통째로 덮어 판다를 가리는 게 의도된 동작
+     ("연결 실패" 자체가 메시지). 캐릭터 폭보다 약간 커서 양옆 막대기까지
+     보이도록 width 130%, bottom -2%로 맞춘다. z-index 100으로 character
+     자식 중 항상 맨 앞. */
   position: absolute;
-  bottom: 0;
+  bottom: -2%;
   left: 50%;
-  height: 65%;
-  width: auto;
+  width: 130%;
+  height: auto;
   transform: translateX(-50%);
   transform-origin: 50% 100%;
   z-index: 100;
   pointer-events: none;
   animation: sign-sway 3.6s ease-in-out infinite;
-  filter: drop-shadow(0 4px 6px rgba(0, 0, 0, 0.55));
+  filter: drop-shadow(0 6px 8px rgba(0, 0, 0, 0.6));
 }
 @keyframes sign-sway {
   /* 표지판이 바람에 살짝 기우뚱 — translateX(-50%) 유지하면서 rotate.
      transform-origin이 50% 100%(밑변 중앙)이라 막대기에 꽂힌 듯 흔들림. */
-  0%, 100% { transform: translateX(-50%) rotate(-1.5deg); }
-  50%      { transform: translateX(-50%) rotate(1.5deg);  }
+  0%, 100% { transform: translateX(-50%) rotate(-1.2deg); }
+  50%      { transform: translateX(-50%) rotate(1.2deg);  }
 }
 
 /* Action overrides — keyed only on data-action so they apply across
