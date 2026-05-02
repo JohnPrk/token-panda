@@ -672,13 +672,17 @@ fn start_watcher(app: AppHandle) -> Arc<WatcherState> {
 }
 
 fn build_tray(app: &AppHandle) -> tauri::Result<()> {
+    // 우클릭/클릭 메뉴 맨 위에 현재 버전 라벨(비활성). CARGO_PKG_VERSION이
+    // tauri.conf.json/package.json과 동기화돼 있어서 빌드 시점 버전이 박힘.
+    let version_label = format!("토큰 판다 v{}", env!("CARGO_PKG_VERSION"));
+    let version_item = MenuItem::with_id(app, "version", &version_label, false, None::<&str>)?;
     let show_item = MenuItem::with_id(app, "show", "펫 보이기/숨기기", true, None::<&str>)?;
     let refresh_item = MenuItem::with_id(app, "refresh", "지금 새로고침", true, None::<&str>)?;
     let settings_item = MenuItem::with_id(app, "settings", "설정...", true, None::<&str>)?;
     let quit_item = MenuItem::with_id(app, "quit", "종료", true, None::<&str>)?;
     let menu = Menu::with_items(
         app,
-        &[&show_item, &refresh_item, &settings_item, &quit_item],
+        &[&version_item, &show_item, &refresh_item, &settings_item, &quit_item],
     )?;
 
     // 4-tier bamboo tray icons keyed to 5h remaining %:

@@ -55,11 +55,12 @@ export function derive(
   // into the tier math so a high 5h doesn't get pulled down by a half-used
   // weekly. The single weekly hook is `weekly = 0 → dead`, which is rare
   // enough to justify its own escape hatch.
-  // `disconnected` overrides everything else: when the poller logged
-  // a recent error and the API snapshot isn't fresh, quota numbers
-  // are stale and the user almost certainly needs to renew cookies.
+  // `disconnected` overrides everything else. 신선한 live API 응답이 없으면
+  // (1) 쿠키 만료/네트워크 에러로 stale, (2) 사용자가 연동 해제해서
+  // config 자체가 비어 polling이 멈춘 상태, (3) 첫 polling 직전 등
+  // 어느 경우든 quota 수치를 신뢰할 수 없으므로 disconnected로 표시한다.
   let petState: PetState;
-  const apiBroken = !apiFresh && !!snap.api_error;
+  const apiBroken = !apiFresh;
   if (apiBroken) petState = "disconnected";
   else if (weeklyRemaining <= 0) petState = "dead";
   else if (fiveHourRemaining <= 0.15) petState = "sleepy";

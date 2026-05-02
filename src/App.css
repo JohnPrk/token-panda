@@ -447,19 +447,22 @@
   filter: grayscale(0.8) brightness(0.8);
 }
 
-/* disconnected: 캐릭터 본체는 평소 모습 그대로, 그 앞에 "연결 실패" 표지판이
-   발(bottom)부터 입(약 40% from top) 높이까지 가려서 들고 있는 느낌.
-   z-index 5로 캐릭터(img: 1) 앞에 띄우고, 미세하게 흔들려 정적이지 않게. */
+/* disconnected: API 끊김 상태. 캐릭터 본체는 dead.png(회색·기절)로 바꾸고
+   그 앞에 "연결 실패" 표지판이 발(bottom)부터 입(약 40% from top) 높이까지
+   가려서 들고 있는 느낌. z-index 100으로 캐릭터(img: 1) 앞에 띄우고,
+   미세하게 흔들려 정적이지 않게. */
 .character[data-state="disconnected"] {
   animation: none;
   filter: none;
 }
-.disconnected-sign {
-  /* 표지판이 캐릭터 박스를 통째로 덮어 판다를 가리는 게 의도된 동작
-     ("연결 실패" 자체가 메시지). 캐릭터 폭보다 약간 커서 양옆 막대기까지
-     보이도록 width 130%, bottom -2%로 맞춘다. z-index 100으로 character
-     자식 중 항상 맨 앞. */
+/* `.character img`(specificity 0,1,1)가 inset:0/width:100%/height:100%를
+   강제하기 때문에, 사인 이미지를 같은 specificity로 매칭해서 모두
+   다시 덮어써야 한다. 그래서 `.character img.disconnected-sign`로 선언. */
+.character img.disconnected-sign {
   position: absolute;
+  inset: auto;
+  top: auto;
+  right: auto;
   bottom: -2%;
   left: 50%;
   width: 130%;

@@ -208,7 +208,7 @@ function AnimPreviewApp() {
         <div className="preview-cell">
           <div className="preview-stage">
             <div className="character" data-state="disconnected">
-              <img src={stillSrc} alt="disconnected" draggable={false} />
+              <img src={skin.frames.disconnected} alt="disconnected" draggable={false} />
               <img
                 className="disconnected-sign"
                 src={ACCESSORIES.disconnectedSign}
@@ -641,7 +641,7 @@ function Pet({
   // Tray title. 4단계 PNG 트레이 아이콘(대나무 → 죽순 → 시든 잎)이 상태를
   // 전부 표현하므로, 텍스트 라벨은 % 만 남겨 중복을 제거한다.
   useEffect(() => {
-    const remaining = d.fiveHourRemaining;
+    const remaining = d.petState === "disconnected" ? 0 : d.fiveHourRemaining;
     const title = `${Math.round(remaining * 100)}%`;
     invoke("set_tray_title", { title }).catch(() => {});
     invoke("set_tray_icon_for_remaining", { remaining }).catch(() => {});
@@ -731,10 +731,10 @@ function Pet({
         {snap?.is_thinking && <ThinkingBubble />}
         {snap && (
           <UsageBubble
-            fiveRemaining={d.fiveHourRemaining}
-            weeklyRemaining={d.weeklyRemaining}
-            fiveResetMs={d.fiveHourResetMs}
-            weeklyResetMs={d.weeklyResetMs}
+            fiveRemaining={d.petState === "disconnected" ? 0 : d.fiveHourRemaining}
+            weeklyRemaining={d.petState === "disconnected" ? 0 : d.weeklyRemaining}
+            fiveResetMs={d.petState === "disconnected" ? null : d.fiveHourResetMs}
+            weeklyResetMs={d.petState === "disconnected" ? null : d.weeklyResetMs}
           />
         )}
       </div>
@@ -770,7 +770,7 @@ function Pet({
             draggable={false}
           />
         )}
-        {idleAction === "scratch" && (
+        {idleAction === "scratch" && d.petState !== "sleepy" && (
           <img className="bamboo bamboo-scratch" src={ACCESSORIES.bamboo} alt="" draggable={false} />
         )}
         {idleAction === "run" && (

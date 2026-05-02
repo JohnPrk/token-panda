@@ -8,9 +8,9 @@ import pandaTired from "./skins/panda/tired.png";
 import pandaSleepy from "./skins/panda/sleepy.png";
 import pandaDead from "./skins/panda/dead.png";
 
-// disconnected 상태에서는 캐릭터 본체는 평소 모습(good)을 그대로 쓰고,
-// 그 위에 "연결 실패" 나무 표지판 오버레이를 캐릭터 앞에 띄운다.
-import pandaDisconnected from "./skins/panda/good.png";
+// disconnected 상태(API 끊김)에서는 캐릭터 본체를 dead.png로 바꾸고,
+// 그 앞에 "연결 실패" 나무 표지판 오버레이를 캐릭터 앞에 띄운다.
+import pandaDisconnected from "./skins/panda/dead.png";
 import pandaDisconnectedSign from "./skins/panda/disconnected_sign.png";
 
 import pandaBamboo from "./skins/panda/bamboo.png";
