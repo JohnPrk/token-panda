@@ -637,6 +637,7 @@
   flex: 1 1 auto;
   background: #fff;
   color: #1f1d28;
+  color-scheme: light;
   border-radius: 14px;
   border: 1px solid #d8d4ec;
   box-shadow: 0 8px 28px rgba(0, 0, 0, 0.4);
@@ -764,6 +765,9 @@
   box-sizing: border-box;
   word-break: keep-all;
   overflow-wrap: anywhere;
+  background: #fff;
+  color: #1f1d28;
+  -webkit-text-fill-color: #1f1d28;
 }
 .onboarding-card textarea { resize: vertical; min-height: 70px; }
 .onboarding-test-row {
@@ -778,6 +782,7 @@
   border-radius: 6px;
   border: 1px solid #c2bccf;
   background: #fff;
+  color: #1f1d28;
   cursor: pointer;
   font: inherit;
   font-size: 11.5px;

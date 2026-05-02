@@ -557,6 +557,7 @@ function Pet({
       "";
     const title = `${prefix}${Math.round(remaining * 100)}%`;
     invoke("set_tray_title", { title }).catch(() => {});
+    invoke("set_tray_icon_for_remaining", { remaining }).catch(() => {});
   }, [d.fiveHourRemaining, d.petState]);
 
   // Threshold notifications (battery-style: low remaining triggers alert)
