@@ -647,9 +647,11 @@ function Pet({
     invoke("set_tray_icon_for_remaining", { remaining }).catch(() => {});
   }, [d.fiveHourRemaining, d.petState]);
 
-  // Threshold notifications (battery-style: low remaining triggers alert)
+  // Threshold notifications (battery-style: low remaining triggers alert).
+  // disconnected는 "데이터 없음" 의미라 마지막 값 기반 알림 발사를 차단.
   useEffect(() => {
     if (!snap) return;
+    if (d.petState === "disconnected") return;
     for (const [t] of REMAINING_THRESHOLDS) {
       if (d.fiveHourRemaining <= t) {
         const pct = Math.round(d.fiveHourRemaining * 100);
@@ -678,7 +680,7 @@ function Pet({
       const elapsed = Date.parse(snap.now) - Date.parse(snap.last_request_at);
       if (elapsed > 5 * 3600_000) resetThreshold("5h-");
     }
-  }, [d.fiveHourRemaining, d.weeklyRemaining, snap]);
+  }, [d.fiveHourRemaining, d.weeklyRemaining, d.petState, snap]);
 
   const skin = findSkin(config.skin);
 

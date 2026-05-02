@@ -2,7 +2,7 @@
 
 > 데스크톱 한구석에서 너의 Claude 토큰 잔량을 지켜봐주는 작은 판다.
 
-[![Download .dmg](https://img.shields.io/badge/Download-.dmg%20v1.06-6b4cff?style=for-the-badge&logo=apple)](https://github.com/JohnPrk/token-panda/releases/latest/download/토큰.판다_1.0.6_aarch64.dmg)
+[![Download .dmg](https://img.shields.io/badge/Download-.dmg%20v1.17-6b4cff?style=for-the-badge&logo=apple)](https://github.com/JohnPrk/token-panda/releases/latest/download/token-panda_1.0.17_aarch64.dmg)
 [![macOS only](https://img.shields.io/badge/platform-macOS%2011%2B-lightgrey?style=for-the-badge&logo=apple)](#한계)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow?style=for-the-badge)](#라이선스)
 
@@ -34,9 +34,19 @@
 
 ### 가장 빠른 방법: 빌드된 .dmg
 
-위쪽 **`Download .dmg`** 배지를 눌러 최신 `.dmg`를 받고, 열어서 `Applications` 폴더로 드래그하면 끝입니다.
+위쪽 **`Download .dmg`** 배지를 눌러 최신 `.dmg`를 받고, 열어서 `Applications` 폴더로 드래그하세요.
 
-> 처음 실행할 때 macOS가 "확인되지 않은 개발자" 경고를 띄울 수 있어요. `시스템 설정 → 개인정보 보호 및 보안 → 그래도 열기`로 한 번 허용하면 다음부터는 바로 실행됩니다. (앱이 정식으로 Apple Developer ID 서명을 받기 전까지는 이 단계가 필요해요.)
+#### 처음 열 때 macOS 차단 우회 (Gatekeeper)
+
+이 앱은 아직 Apple Developer ID 서명을 안 받은 상태라 처음 실행 시 macOS가 차단합니다. 한 번만 아래 단계를 거치면 다음부터는 평범하게 더블클릭으로 열립니다.
+
+1. `Applications`에서 **토큰 판다.app** 더블클릭 → "확인되지 않은 개발자" 경고가 뜨고 차단됨
+2. **시스템 설정 → 개인정보 보호 및 보안** 열기
+3. 화면을 끝까지 아래로 스크롤하면 *"토큰 판다.app은(는) 신원 미상의 개발자가 배포했기 때문에…"* 라는 메시지가 보임
+4. 그 옆의 **`그래도 열기`** 클릭 → 한 번 더 확인 다이얼로그 → `열기`
+5. 이후엔 그냥 더블클릭으로 실행 가능
+
+> 정식 코드 서명은 Apple Developer Program ($99/년) 가입과 공증(notarization) 셋업이 필요해서 보류 중입니다. 그 전까지는 이 우회 단계로 사용해 주세요.
 
 <br>
 
